@@ -1,59 +1,40 @@
-from battalion.command import CLI, Handler
+from battalion.command import CLI, Handler, command
 
 
 class mycli(CLI):    
-    """mycli
-
-    Usage:
-      mycli [options] COMMAND
-      mycli -h|--help
-
-    Options:
-      --verbose                 Show more output
-      --version                 Print version and exit
-
-    Commands:
-      myhandler     Example handler
-
+    """
+    mycli
     """
     version = '0.0.1'
+
+    @command
+    def world(self, name="Hello"):
+        """
+        Prints "{name} World!"
+        """
+        print "{0} World!".format(name)
+        
 
 class myhandler(Handler):
     """
-
-    Usage:
-      myhandler COMMAND
-
-    Commands:
-      hello     Example command
-      greeting  Example options command
-
+    myhandler
     """
-    version = '0.0.1'
+    version = '0.0.2'
     cli = 'mycli'
-    
+
+    @command
     def hello(self):
         """
         Prints "Hello, World!"
-    
-        Usage:
-          hello
-    
         """
         print "Hello, World!"
-        
-    def greeting(self, name):
+
+    @command
+    def greeting(self, greeting, name="World"):
         """
         Prints "Hello, {name}"
-    
-        Usage:
-          greeting [options]
-          
-        Options:
-          -n --name NAME  The name of the person to greet
-    
         """
-        print "Hello, {0}!".format(name)
+        print "{0}, {1}!".format(greeting, name)
 
 if __name__ == "__main__":
     mycli.main()
