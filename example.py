@@ -1,11 +1,12 @@
-from battalion.command import CLI, Handler, command
+from battalion.api import CLI, Handler, command
 
 
 class mycli(CLI):    
     """
     mycli
     """
-    version = '0.0.1'
+    class State:
+        version = '0.0.1'
 
     @command
     def world(self, name="Hello"):
@@ -19,8 +20,12 @@ class myhandler(Handler):
     """
     myhandler
     """
-    version = '0.0.2'
-    cli = 'mycli'
+    class State:
+        version = '0.0.2'
+        cli = 'mycli'
+        
+    def __init__(self):
+        super(myhandler, self).__init__()
 
     @command
     def hello(self):
@@ -30,9 +35,9 @@ class myhandler(Handler):
         print "Hello, World!"
 
     @command
-    def greeting(self, greeting, name="World"):
+    def greeting(self, greeting="Hello", name="World"):
         """
-        Prints "Hello, {name}"
+        Prints "{greeting}, {name}"
         """
         print "{0}, {1}!".format(greeting, name)
 
