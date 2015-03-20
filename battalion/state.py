@@ -1,5 +1,42 @@
 from pyul.coreUtils import DotifyDict
 
+class State(object):
+    """
+    A class to provide a way to combine
+     - state settings | by the programmer
+     - config settings | by the users environment
+     - options settings | by the user at command runtime
+    To produce a final "state" of the configuration
+    """
+
+    def __init__(self):
+        self.state_list = list()
+        self.options_list = list()
+        self.config_list = list()
+
+    def add_options(self, options):
+        self.options_list.append(options)
+    
+    def add_state(self, state):
+        self.state_list.append(state)
+    
+    def add_config(self, config):
+        self.config_list.append(config)
+    
+    def compile(self):
+        final_state = DotifyDict()
+        for state in reversed(self.state_list):
+            final_state.update(state)
+
+        for config in self.config_list:
+            final_state.update(config)
+
+        for option in self.options_list:
+            final_state.update(option)
+
+        return final_state
+
+state = State()
 
 class StateMixin(object):
     """

@@ -10,13 +10,9 @@ from docopt import docopt
 
 from .exceptions import NoSuchCommand, CommandMissingDefaults
 from .registry import CLIRegistrationMixin, HandlerRegistrationMixin, registry
-from .state import StateMixin
+from .state import StateMixin, state
 
 LOG = logging.getLogger(__name__)
-
-config = DotifyDict()
-state = DotifyDict()
-
 
 def cleanup_data(data):
     new_data = {}
@@ -30,18 +26,6 @@ def cleanup_data(data):
             continue
         new_data[k] = v
     return DotifyDict(new_data)
-
-
-def add_to_state(data):
-    global state
-    data = cleanup_data(data)
-    state = data.update(state)
-
-
-def get_state():
-    global state
-    return state
-
 
 def get_command_spec(command):
     spec = getargspec(command)
@@ -132,8 +116,8 @@ class BaseCommand(StateMixin):
             command = self.commands[command_name]
         except KeyError:
             raise NoSuchCommand(command_name, self)
-        add_to_state(self._state)
-        add_to_state(options)
+        state.add_state(cleanup_data(self._state))
+        state.add_options(cleanup_data(options))
         return command, args
 
     def dispatch(self, argv):
@@ -142,15 +126,13 @@ class BaseCommand(StateMixin):
         self.run(command, args)
 
     def run(self, command, args):
-        global config
         command_options = docopt(cleandoc(command.__autodoc__), args)
         kwargs = self.format_command_args(command, command_options)
-        add_to_state(config)
-        state = get_state()
-        show_state = state.pop('show_state', False)
-        if show_state:
-            print "State:", state
-        command(get_state(), **kwargs)
+        state.add_options(kwargs)
+        final_state = state.compile()
+        if final_state.debug:
+            print "State:", final_state
+        command(final_state, **kwargs)
 
 
 class AutoDocCommand(BaseCommand):
@@ -260,13 +242,15 @@ class Handler(AutoDocCommand):
 class CLI(AutoDocCommand):
     class State:
         options = [('-d, --debug', 'Show debug messages'),
-                   ('--config=<CONFIG>', 'The config filepath [default: {0}]'),
-                   ('--show-state', 'Show the value of the compiled global state at command runtime')]
+                   ('--config=<CONFIG>', 'The config filepath [default: {0}]')]
+
+    @classmethod
+    def main(cls):
+        cls()()
 
     def __call__(self):
         try:
             self.setup_logging()
-            self.find_config(sys.argv[1:])
             self.dispatch(argv=sys.argv[1:])
         except KeyboardInterrupt:
             LOG.error("\nAborting.")
@@ -276,24 +260,6 @@ class CLI(AutoDocCommand):
             LOG.error("")
             LOG.error("\n".join(parse_doc_section("commands:", getdoc(e.supercommand))))
             sys.exit(1)
-
-    def dispatch(self, argv):
-        options = self.get_options(argv)
-        command, args = self.get_command(options)
-        if isinstance(command, Handler):
-            command.dispatch(args)
-        else:
-            args.insert(0, command.func_name)
-            super(CLI, self).dispatch(argv)
-
-    def find_config(self, args):
-        global config
-        options = self.get_options(args)
-        config_filepath = os.path.expanduser(options['--config'])
-        self._state.config_file = config_filepath
-        if os.path.exists(config_filepath):
-            with open(self._state.config_file, 'r') as ymlfile:
-                config = DotifyDict(data=yaml.load(ymlfile))
 
     @property
     def key(self):
@@ -306,7 +272,20 @@ class CLI(AutoDocCommand):
         root_logger = logging.getLogger()
         root_logger.addHandler(console_handler)
         root_logger.setLevel(logging.DEBUG)
+    def dispatch(self, argv):
+        options = self.get_options(argv)
+        self.load_config(options)
+        command, args = self.get_command(options)
+        if isinstance(command, Handler):
+            command.dispatch(args)
+        else:
+            args.insert(0, command.func_name)
+            super(CLI, self).dispatch(argv)
 
-    @classmethod
-    def main(cls):
-        cls()()
+    def load_config(self, options):
+        config_filepath = os.path.expanduser(options['--config'])
+        self._state.config_file = config_filepath
+        if os.path.exists(config_filepath):
+            with open(self._state.config_file, 'r') as ymlfile:
+                config = DotifyDict(data=yaml.load(ymlfile))
+                state.add_config(cleanup_data(config))
