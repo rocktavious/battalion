@@ -7,10 +7,9 @@ class myCLI(CLI):
     """
     class State:
         version = '0.0.1'
-        options = [('--config=<CONFIG>', 'The config filepath [default: ~/.mycli/mycli.cfg]')]
 
     @command
-    def world(options, name="Hello"):
+    def world(state, name="Hello"):
         """
         Prints "{name} World!"
         """
@@ -25,27 +24,28 @@ class myhandler(Handler):
     class State:
         version = '0.0.2'  # Handlers can have their own versioning
         cli = 'myCLI'
+        static_var = "Kyle"
 
     @command
-    def hello(options):
+    def hello(state):
         """
         Prints "Hello, World!"
         """
         print "Hello, World!"
 
 
-@command(cli='myCLI', handler='myhandler', alias='greet') # alias or aliases are great ways to bridge gaps during
+@command(cli='myCLI', handler='myhandler', alias='greet') # alias or aliases are great ways to bridge gaps during refactoring of api
 @command(cli='myCLI') # multiple command decorators can be applied to place a command into multiple areas for ease of use but still benefits from a single source of code
-                      # NOTE: options will differ since its either the handler passing the options or the CLI passing the options
-def greeting(options, greeting="Hello", name="World"):
+                      # NOTE: state will differ since its being built up with handler or without the handler
+def greeting(state, greeting="Hello", name="World"):
     """
     Prints "{greeting}, {name}"
     """
     print "{0}, {1}!".format(greeting, name)
-    print options
+    print state.static_var
 
 @command(cli='myCLI')
-def test(options, name="DAMN"):
+def test(state, name="DAMN"):
     """
     Prints {name}!
     """
