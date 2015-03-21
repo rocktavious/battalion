@@ -1,6 +1,6 @@
-from pyul.coreUtils import DotifyDict
+from pyul.coreUtils import DotifyDict, synthesize
 
-class State(object):
+class State(DotifyDict):
     """
     A class to provide a way to combine
      - state settings | by the programmer
@@ -10,6 +10,7 @@ class State(object):
     """
 
     def __init__(self):
+        self.cli = None
         self.state_list = list()
         self.options_list = list()
         self.config_list = list()
@@ -24,17 +25,21 @@ class State(object):
         self.config_list.append(config)
     
     def compile(self):
-        final_state = DotifyDict()
         for state in reversed(self.state_list):
-            final_state.update(state)
+            self.update(state)
 
         for config in self.config_list:
-            final_state.update(config)
+            self.update(config)
 
         for option in self.options_list:
-            final_state.update(option)
-
-        return final_state
+            self.update(option)
+        
+        self.pop('state_list')
+        self.pop('config_list')
+        self.pop('options_list')
+        self.cli.state = self
+        for handler in self.cli.handlers:
+            handler.state = self
 
 state = State()
 

@@ -4,8 +4,9 @@ import re
 import logging
 import six
 import yaml
+from functools import partial
 from inspect import getdoc, cleandoc, isclass, getargspec
-from pyul.coreUtils import DotifyDict
+from pyul.coreUtils import DotifyDict, synthesize
 from docopt import docopt
 
 from .exceptions import NoSuchCommand, CommandMissingDefaults
@@ -29,7 +30,7 @@ def cleanup_data(data):
 
 def get_command_spec(command):
     spec = getargspec(command)
-    args = [a for a in spec.args if a != "state"]
+    args = [a for a in spec.args if a != "cli"]
     defaults = spec.defaults
     kwargs = {}
     if args and defaults:
@@ -77,6 +78,10 @@ class BaseCommand(StateMixin):
     @property
     def commands(self):
         return registry.get_commands(self.key)
+
+    @property
+    def handlers(self):
+        return [h for h in self.commands if isinstance(h, Handler)]
 
     @property
     def docstring(self):
@@ -129,10 +134,11 @@ class BaseCommand(StateMixin):
         command_options = docopt(cleandoc(command.__autodoc__), args)
         kwargs = self.format_command_args(command, command_options)
         state.add_options(kwargs)
-        final_state = state.compile()
-        if final_state.debug:
-            print "State:", final_state
-        command(final_state, **kwargs)
+        state.compile()
+        
+        if state.debug:
+            print "State:", state
+        command(state.cli, **kwargs)
 
 
 class AutoDocCommand(BaseCommand):
@@ -235,7 +241,14 @@ class AutoDocCommand(BaseCommand):
 
 @six.add_metaclass(HandlerRegistrationMixin)
 class Handler(AutoDocCommand):
-    pass
+
+    def __init__(self):
+        super(Handler, self).__init__()
+        
+    def __getattr__(self, name):
+        if name in self.commands:
+            return partial(self.commands[name], state.cli)
+        raise AttributeError
 
 
 @six.add_metaclass(CLIRegistrationMixin)
@@ -247,6 +260,10 @@ class CLI(AutoDocCommand):
     @classmethod
     def main(cls):
         cls()()
+        
+    def __init__(self):
+        state.cli = self
+        super(CLI, self).__init__()
 
     def __call__(self):
         try:
@@ -260,6 +277,15 @@ class CLI(AutoDocCommand):
             LOG.error("")
             LOG.error("\n".join(parse_doc_section("commands:", getdoc(e.supercommand))))
             sys.exit(1)
+            
+    def __getattr__(self, name):
+        if name in self.commands:
+            cmd = self.commands[name]
+            if isinstance(cmd, Handler):
+                return cmd
+            else:
+                return partial(cmd, self)
+        raise AttributeError
 
     @property
     def key(self):
@@ -272,6 +298,7 @@ class CLI(AutoDocCommand):
         root_logger = logging.getLogger()
         root_logger.addHandler(console_handler)
         root_logger.setLevel(logging.DEBUG)
+
     def dispatch(self, argv):
         options = self.get_options(argv)
         self.load_config(options)
