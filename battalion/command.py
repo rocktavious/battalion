@@ -12,6 +12,7 @@ from docopt import docopt
 from .exceptions import NoSuchCommand, CommandMissingDefaults
 from .registry import CLIRegistrationMixin, HandlerRegistrationMixin, registry
 from .state import StateMixin, state
+from .log import enable_logging
 
 LOG = logging.getLogger(__name__)
 
@@ -150,6 +151,8 @@ class AutoDocCommand(BaseCommand):
         column_padding = 30
 
     def __init__(self):
+        if self.__doc__ is None:
+            self.__doc__ = ""
         super(AutoDocCommand, self).__init__()
         self.generate_class_doc()
         self.generate_commands_doc()
@@ -159,7 +162,7 @@ class AutoDocCommand(BaseCommand):
         return cleandoc(self.__autodoc__)
 
     def generate_class_doc(self):
-        LOG.debug('Documenting', self.name)
+        LOG.debug('Documenting %s', self.name)
         new_doc = getdoc(self) or """{0}""".format(self.name)
         new_doc += "\n\n"
         new_doc += self.generate_usage()
@@ -170,10 +173,10 @@ class AutoDocCommand(BaseCommand):
     def generate_commands_doc(self):
         for name, func in self.commands.items():
             if isclass(func) and issubclass(func, Handler):
-                LOG.debug('Documenting Command', name)
+                LOG.debug('Documenting Command %s', name)
                 self.commands[name] = func()
             else:
-                LOG.debug('Documenting Command', name)
+                LOG.debug('Documenting Command %s', name)
                 new_command_doc = getdoc(func) or """{0}""".format(name)
                 new_command_doc += "\n\n"
                 new_command_doc += self.generate_command_usage(name, func)
@@ -262,6 +265,7 @@ class CLI(AutoDocCommand):
         cls()()
         
     def __init__(self):
+        self.log = logging.getLogger(self.name)
         state.cli = self
         super(CLI, self).__init__()
 
@@ -292,12 +296,7 @@ class CLI(AutoDocCommand):
         return (self.name,)
 
     def setup_logging(self):
-        console_handler = logging.StreamHandler(sys.stderr)
-        console_handler.setFormatter(logging.Formatter())
-        console_handler.setLevel(logging.INFO)
-        root_logger = logging.getLogger()
-        root_logger.addHandler(console_handler)
-        root_logger.setLevel(logging.DEBUG)
+        enable_logging(level=logging.INFO)
 
     def dispatch(self, argv):
         options = self.get_options(argv)

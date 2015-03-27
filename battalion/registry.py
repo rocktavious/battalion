@@ -27,7 +27,7 @@ class Registry(object):
         return name in self._cache.keys()
 
     def _register(self, key, func, name):
-        LOG.debug("registering", name, "to", key)
+        LOG.debug("registering %s to %s", name, key)
         commands = self.get_commands(key)
         if name in commands.keys():
             raise ValueError("{0} already registered to {1}".format(name, key))
@@ -40,7 +40,7 @@ class Registry(object):
 
     def register(self, func, name, key=None, aliases=[]):
         if name not in self._cache.keys():
-            LOG.debug("caching", name)
+            LOG.debug("caching %s", name)
             self._cache[name] = (func, aliases)
         if any(key):
             self._register(key, func, name)
