@@ -1,4 +1,4 @@
-pyversion>=0.2.3
+pyversion>=0.3.1
 pbr
 six
 docopt
