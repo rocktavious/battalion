@@ -6,7 +6,7 @@ import six
 import yaml
 from functools import partial
 from inspect import getdoc, cleandoc, isclass, getargspec
-from pyul.coreUtils import DotifyDict, synthesize
+from pyul.coreUtils import DotifyDict
 from docopt import docopt
 
 from .exceptions import NoSuchCommand, CommandMissingDefaults
@@ -15,6 +15,7 @@ from .state import StateMixin, state
 from .log import enable_logging
 
 LOG = logging.getLogger(__name__)
+
 
 def cleanup_data(data):
     new_data = {}
@@ -28,6 +29,7 @@ def cleanup_data(data):
             continue
         new_data[k] = v
     return DotifyDict(new_data)
+
 
 def get_command_spec(command):
     spec = getargspec(command)
@@ -136,7 +138,7 @@ class BaseCommand(StateMixin):
         kwargs = self.format_command_args(command, command_options)
         state.add_options(kwargs)
         state.compile()
-        
+
         if state.debug:
             LOG.debug("State:\n{0}".format(state))
         return command(state.cli, **kwargs)
@@ -247,7 +249,7 @@ class Handler(AutoDocCommand):
 
     def __init__(self):
         super(Handler, self).__init__()
-        
+
     def __getattr__(self, name):
         if name in self.commands:
             return partial(self.commands[name], state.cli)
@@ -263,7 +265,7 @@ class CLI(AutoDocCommand):
     @classmethod
     def main(cls, argv=None):
         return cls()(argv)
-        
+
     def __init__(self):
         self.log = logging.getLogger(self.name)
         state.cli = self
@@ -283,7 +285,7 @@ class CLI(AutoDocCommand):
             LOG.error("")
             LOG.error("\n".join(parse_doc_section("commands:", getdoc(e.supercommand))))
             sys.exit(1)
-            
+
     def __getattr__(self, name):
         if name in self.commands:
             cmd = self.commands[name]

@@ -1,4 +1,5 @@
-from pyul.coreUtils import DotifyDict, synthesize
+from pyul.coreUtils import DotifyDict
+
 
 class State(DotifyDict):
     """
@@ -17,13 +18,13 @@ class State(DotifyDict):
 
     def add_options(self, options):
         self.options_list.append(options)
-    
+
     def add_state(self, state):
         self.state_list.append(state)
-    
+
     def add_config(self, config):
         self.config_list.append(config)
-    
+
     def compile(self):
         for state in reversed(self.state_list):
             self.update(state)
@@ -33,7 +34,7 @@ class State(DotifyDict):
 
         for option in self.options_list:
             self.update(option)
-        
+
         self.pop('state_list')
         self.pop('config_list')
         self.pop('options_list')
@@ -42,6 +43,7 @@ class State(DotifyDict):
             handler.state = self
 
 state = State()
+
 
 class StateMixin(object):
     """
