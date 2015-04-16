@@ -14,7 +14,8 @@ class Registry(object):
 
     def __init__(self):
         self._registry = {}
-        self._cache = {}
+        self._cache = []
+        self._aliases = {}
 
     def get_commands(self, key):
         try:
@@ -23,11 +24,11 @@ class Registry(object):
             commands = {}
         return commands
 
-    def is_cached(self, name):
-        return name in self._cache.keys()
+    def is_cached(self, func):
+        return func in self._cache
 
     def _register(self, key, func, name):
-        LOG.debug("registering %s to %s", name, key)
+        LOG.debug('registering "%s" to "%s"', name, key)
         commands = self.get_commands(key)
         if name in commands.keys():
             raise ValueError("{0} already registered to {1}".format(name, key))
@@ -39,13 +40,19 @@ class Registry(object):
         self._registry[key] = commands
 
     def register(self, func, name, key=None, aliases=[]):
-        if name not in self._cache.keys():
-            LOG.debug("caching %s", name)
-            self._cache[name] = (func, aliases)
+        if func not in self._cache:
+            LOG.debug('caching command "%s"', name)
+            self._cache.append(func)
         if any(key):
             self._register(key, func, name)
             for alias in aliases:
                 self._register(key, func, alias)
+            for alias in [a for a, f in self._aliases.items() if f is func]:
+                self._register(key, func, alias)
+        else:
+            for alias in aliases:
+                LOG.debug('caching alias "%s" for command "%s"', alias, name)
+                self._aliases[alias] = func
 
     def bind(self, func, cli, handler=None, aliases=[]):
         if handler:
@@ -64,7 +71,7 @@ class HandlerRegistrationMixin(type):
         if hasattr(newclass.State, 'cli') and newclass.State.cli is not None and newclass.State.cli != "self":
             registry.register(newclass, clsname, (newclass.State.cli,))
             for k, v in attrs.items():
-                if registry.is_cached(k) and registry._cache[k][0] == v:
+                if registry.is_cached(v):
                     registry.register(v, k, (newclass.State.cli, clsname))
         return newclass
 
@@ -73,7 +80,7 @@ class CLIRegistrationMixin(type):
     def __new__(cls, clsname, bases, attrs):
         newclass = super(CLIRegistrationMixin, cls).__new__(cls, clsname, bases, attrs)
         for k, v in attrs.items():
-            if registry.is_cached(k) and registry._cache[k][0] == v:
+            if registry.is_cached(v):
                 registry.register(v, k, (clsname,))
         return newclass
 
@@ -95,6 +102,9 @@ def command(*args, **kwargs):
         else:
             key = (cli,)
         aliases = kwargs.get('aliases', [])
+        if not isinstance(aliases, list):
+            raise ValueError('command decorator aliases takes a list, ' \
+                             'just use "alias" for a single string alias!')
         alias = kwargs.get('alias', [])
         if isinstance(alias, list):
             aliases += alias

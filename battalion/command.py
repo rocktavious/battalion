@@ -5,7 +5,7 @@ import logging
 import six
 import yaml
 from functools import partial
-from inspect import getdoc, cleandoc, isclass, getargspec
+from inspect import getdoc, cleandoc, isclass, getargspec, getcallargs
 from pyul.coreUtils import DotifyDict
 from docopt import docopt
 
@@ -33,13 +33,9 @@ def cleanup_data(data):
 
 def get_command_spec(command):
     spec = getargspec(command)
-    args = [a for a in spec.args if a != "cli"]
-    defaults = spec.defaults
-    kwargs = {}
-    if args and defaults:
-        if len(args) != len(defaults):
-            raise CommandMissingDefaults(command)
-        kwargs = dict(zip(args, defaults))
+    positional = [None] * (len(spec.args) - len(spec.defaults or []))
+    kwargs = getcallargs(command, *positional)
+    kwargs.pop('cli')
     return kwargs
 
 
@@ -98,14 +94,16 @@ class BaseCommand(StateMixin):
     def format_command_args(self, command, kwargs):
         new_kwargs = {}
         command_kwargs = get_command_spec(command)
-        for k, v in kwargs.items():
+        for k, v in sorted(kwargs.items()):
             if k.startswith('--'):
                 k = k[2:]
             if k.startswith('-'):
                 k = k[1:]
             k = k.replace('-', '_')
+            k = k.replace('<', '')
+            k = k.replace('>', '')
             if v is None:
-                v = command_kwargs[k] or None
+                v = new_kwargs[k] or command_kwargs[k] or None
             if k in command_kwargs:
                 new_kwargs[k] = v
         return new_kwargs
@@ -156,8 +154,13 @@ class AutoDocCommand(BaseCommand):
         if self.__doc__ is None:
             self.__doc__ = ""
         super(AutoDocCommand, self).__init__()
-        self.generate_class_doc()
-        self.generate_commands_doc()
+        # We check if autodoc has already happend so that
+        # so that test frameworks can keep generating new
+        # instances of the same class without redocumenting
+        # which will cause a failure
+        if not hasattr(self, "__autodoc__"):
+            self.generate_class_doc()
+            self.generate_commands_doc()
 
     @property
     def docstring(self):
@@ -224,7 +227,20 @@ class AutoDocCommand(BaseCommand):
     def generate_command_usage(self, name, command):
         docstring = ""
         if "Usage:" not in command.__doc__:
-            docstring += "Usage:\n    {0} [options]\n\n".format(name)
+            docstring += "Usage:\n    {0} [options]\n".format(name)
+            args = getargspec(command).args
+            spec = get_command_spec(command)
+            if 'cli' in args:
+                args = args[1:]
+            if args:
+                docstring += "    {0} ".format(name)
+                for arg_name in args:
+                    if spec[arg_name] is not None:
+                        docstring += "[<{0}>] ".format(arg_name)
+                    else:
+                        docstring += "<{0}> ".format(arg_name)
+                docstring += "\n"
+            docstring += "\n"
         return docstring
 
     def generate_command_options(self, command):
@@ -275,8 +291,9 @@ class CLI(AutoDocCommand):
         if argv is None:
             argv = sys.argv[1:]
         try:
+            rv = None
             self.setup_logging()
-            return self.dispatch(argv=argv)
+            rv = self.dispatch(argv=argv)
         except KeyboardInterrupt:
             LOG.error("\nAborting.")
             sys.exit(1)
@@ -285,6 +302,9 @@ class CLI(AutoDocCommand):
             LOG.error("")
             LOG.error("\n".join(parse_doc_section("commands:", getdoc(e.supercommand))))
             sys.exit(1)
+        finally:
+            if rv:
+                print rv
 
     def __getattr__(self, name):
         if name in self.commands:

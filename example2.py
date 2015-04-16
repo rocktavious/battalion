@@ -1,6 +1,5 @@
 from battalion.api import *
 
-
 class myCLI(CLI):    
     """
     Toplevel program - myCLI

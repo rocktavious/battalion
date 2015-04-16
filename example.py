@@ -16,14 +16,21 @@ class myCLI(CLI):
         """"""
         return "Boom"
 
-    @command
+    @command(alias="hello_world")
     def world(cli, name="Hello"):
         """
         Prints "{name} World!"
         """
         print "{0} World!".format(name)
         print cli
-        
+
+    @command
+    def add(cli, num1, num2, mul=2):
+        """
+        Add {num1} to {num2}
+        """
+        return (float(num1) + float(num2)) * float(mul)
+
 
 class myhandler(Handler):
     """
@@ -43,6 +50,13 @@ class myhandler(Handler):
         name = cli.normal_function(cli.state.static_var)
         name = cli.command_output(val=name)
         cli.myhandler.greeting(name=name)
+
+    @command(alias='add2')
+    def add(cli, num1, num2):
+        """
+        Add {num1} to {num2}
+        """
+        return float(num1) + float(num2)
 
 
 @command(cli='myCLI', handler='myhandler', alias='greet') # alias or aliases are great ways to bridge gaps during refactoring of api
