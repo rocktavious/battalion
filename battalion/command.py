@@ -129,7 +129,7 @@ class BaseCommand(StateMixin):
     def dispatch(self, argv):
         options = self.get_options(argv)
         command, args = self.get_command(options)
-        self.run(command, args)
+        return self.run(command, args)
 
     def run(self, command, args):
         command_options = docopt(cleandoc(command.__autodoc__), args)
@@ -138,8 +138,8 @@ class BaseCommand(StateMixin):
         state.compile()
         
         if state.debug:
-            print "State:", state
-        command(state.cli, **kwargs)
+            LOG.debug("State:\n{0}".format(state))
+        return command(state.cli, **kwargs)
 
 
 class AutoDocCommand(BaseCommand):
@@ -261,18 +261,20 @@ class CLI(AutoDocCommand):
                    ('--config=<CONFIG>', 'The config filepath [default: {0}]')]
 
     @classmethod
-    def main(cls):
-        cls()()
+    def main(cls, argv=None):
+        return cls()(argv)
         
     def __init__(self):
         self.log = logging.getLogger(self.name)
         state.cli = self
         super(CLI, self).__init__()
 
-    def __call__(self):
+    def __call__(self, argv=None):
+        if argv is None:
+            argv = sys.argv[1:]
         try:
             self.setup_logging()
-            self.dispatch(argv=sys.argv[1:])
+            return self.dispatch(argv=argv)
         except KeyboardInterrupt:
             LOG.error("\nAborting.")
             sys.exit(1)
@@ -303,10 +305,10 @@ class CLI(AutoDocCommand):
         self.load_config(options)
         command, args = self.get_command(options)
         if isinstance(command, Handler):
-            command.dispatch(args)
+            return command.dispatch(args)
         else:
             args.insert(0, command.func_name)
-            super(CLI, self).dispatch(argv)
+            return super(CLI, self).dispatch(argv)
 
     def load_config(self, options):
         config_filepath = os.path.expanduser(options['--config'])
