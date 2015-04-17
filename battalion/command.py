@@ -4,6 +4,8 @@ import re
 import logging
 import six
 import yaml
+import traceback
+import json
 from functools import partial
 from inspect import getdoc, cleandoc, isclass, getargspec, getcallargs
 from pyul.coreUtils import DotifyDict
@@ -326,6 +328,9 @@ class CLI(AutoDocCommand):
             LOG.error("No such command: %s", e.command)
             LOG.error("")
             LOG.error("\n".join(parse_doc_section("commands:", getdoc(e.supercommand))))
+            sys.exit(1)
+        except Exception as e:
+            LOG.error("\n{0}".format(traceback.format_exc()))
             sys.exit(1)
         finally:
             if '--show-return-value' in argv:

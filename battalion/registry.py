@@ -1,6 +1,8 @@
 import logging
 import types
+from decorator import decorator
 from inspect import isclass
+
 
 LOG = logging.getLogger(__name__)
 
@@ -132,11 +134,27 @@ def command(*args, **kwargs):
     return register if invoked else register(func)
 
 
-def fixture(func, *args, **kwargs):
+def _memoize(func, *args, **kw):
+    cache = func.cache  # attributed added by memoize
+    if func in cache:
+        return cache[func]
+    else:
+        cache[func] = result = func(*args, **kw)
+        return result
+
+
+def fixture(func, memoize=True):
     """
     Decorator for a function that will be called ahead of the execution
     of a command that provides a return value to fill the commands
     argument with
+    
+    Fixtures memoize their results by default.
     """
-    registry.register_fixture(func, func.__name__)
-    return func
+    if memoize:
+        func.cache = {}
+        new_func = decorator(_memoize, func)
+    else:
+        new_func = func
+    registry.register_fixture(new_func, func.__name__)
+    return new_func
