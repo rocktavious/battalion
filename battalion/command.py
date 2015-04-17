@@ -5,13 +5,12 @@ import logging
 import six
 import yaml
 import traceback
-import json
 from functools import partial
 from inspect import getdoc, cleandoc, isclass, getargspec, getcallargs
 from pyul.coreUtils import DotifyDict
 from docopt import docopt
 
-from .exceptions import NoSuchCommand, CommandMissingDefaults
+from .exceptions import NoSuchCommand
 from .registry import CLIRegistrationMixin, HandlerRegistrationMixin, registry
 from .state import StateMixin, state
 from .log import enable_logging
@@ -32,9 +31,11 @@ def cleanup_data(data):
         new_data[k] = v
     return DotifyDict(new_data)
 
+
 def get_command_args(command):
     args = [a for a in getargspec(command).args if a not in registry._fixtures.keys() and a != 'cli']
     return args
+
 
 def get_command_spec(command, without_fixtures=True):
     spec = getargspec(command)
@@ -153,10 +154,8 @@ class BaseCommand(StateMixin):
         kwargs = self.format_command_args(command, command_options)
         state.add_options(kwargs)
         state.compile()
-        
         fixture_kwargs = self.get_fixture_args(command, state)
-        kwargs.update(fixture_kwargs)        
-
+        kwargs.update(fixture_kwargs)
         if state.debug:
             LOG.debug("State:\n{0}".format(state))
         return command(state.cli, **kwargs)
@@ -182,7 +181,7 @@ class AutoDocCommand(BaseCommand):
             self.generate_class_doc()
             self.generate_commands_doc()
             self.set_autodoc(self.docstring)
-    
+
     @classmethod
     def set_autodoc(cls, docstring):
         cls.__autodoc__ = docstring

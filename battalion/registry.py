@@ -122,7 +122,7 @@ def command(*args, **kwargs):
             key = (cli,)
         aliases = kwargs.get('aliases', [])
         if not isinstance(aliases, list):
-            raise ValueError('command decorator aliases takes a list, ' \
+            raise ValueError('command decorator aliases takes a list, '
                              'just use "alias" for a single string alias!')
         alias = kwargs.get('alias', [])
         if isinstance(alias, list):
@@ -148,7 +148,7 @@ def fixture(func, memoize=True):
     Decorator for a function that will be called ahead of the execution
     of a command that provides a return value to fill the commands
     argument with
-    
+
     Fixtures memoize their results by default.
     """
     if memoize:
