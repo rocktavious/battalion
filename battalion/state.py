@@ -12,6 +12,9 @@ class State(DotifyDict):
 
     def __init__(self):
         self.cli = None
+        self.reinit()
+
+    def reinit(self):
         self.state_list = list()
         self.options_list = list()
         self.config_list = list()

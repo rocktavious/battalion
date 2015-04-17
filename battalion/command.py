@@ -161,6 +161,11 @@ class AutoDocCommand(BaseCommand):
         if not hasattr(self, "__autodoc__"):
             self.generate_class_doc()
             self.generate_commands_doc()
+            self.set_autodoc(self.docstring)
+    
+    @classmethod
+    def set_autodoc(cls, docstring):
+        cls.__autodoc__ = docstring
 
     @property
     def docstring(self):
@@ -276,6 +281,7 @@ class Handler(AutoDocCommand):
 class CLI(AutoDocCommand):
     class State:
         options = [('-d, --debug', 'Show debug messages'),
+                   ('--show-return-value', 'Show the commands return value'),
                    ('--config=<CONFIG>', 'The config filepath [default: {0}]')]
 
     @classmethod
@@ -288,11 +294,12 @@ class CLI(AutoDocCommand):
         super(CLI, self).__init__()
 
     def __call__(self, argv=None):
+        rv = None
+        state.reinit()
+        self.setup_logging()
         if argv is None:
             argv = sys.argv[1:]
         try:
-            rv = None
-            self.setup_logging()
             rv = self.dispatch(argv=argv)
         except KeyboardInterrupt:
             LOG.error("\nAborting.")
@@ -303,8 +310,9 @@ class CLI(AutoDocCommand):
             LOG.error("\n".join(parse_doc_section("commands:", getdoc(e.supercommand))))
             sys.exit(1)
         finally:
-            if rv:
+            if '--show-return-value' in argv:
                 print rv
+            return rv
 
     def __getattr__(self, name):
         if name in self.commands:
