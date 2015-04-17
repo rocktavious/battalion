@@ -1,35 +1,33 @@
 from battalion.api import *
 
+class Git():
+    
+    def __init__(self, state):
+        self.msg = state.git_msg
+
+    def myfunc(self):
+        print self.msg
+
+@fixture
+def git(state):
+    return Git(state)
+
 class myCLI(CLI):    
     """
     Toplevel program - myCLI
     """
     class State:
         version = '0.0.1'
+        git_msg = "WOW1"
 
     @command
-    def hello(cli, name="Hello"):
+    def hello(cli, git, name="Hello"):
         """
         Prints "{name} World!"
         """
         cli.log.info("{0} World!".format(name))
-        
-
-class myhandler(Handler):
-    """
-    Organizational container of commands which can also add state variables
-    """
-    class State:
-        version = '0.0.2'  # Handlers can have their own versioning
-        cli = 'myCLI'
-        static_var = "Kyle"
-
-    @command
-    def hello(cli):
-        """
-        Prints "Hello, World!"
-        """
-        cli.log.info("Hello")
+        git.myfunc()
+        cli.log.info("Fixture: {0}".format(git))
 
 
 if __name__ == "__main__":

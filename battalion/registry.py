@@ -16,6 +16,7 @@ class Registry(object):
         self._registry = {}
         self._cache = []
         self._aliases = {}
+        self._fixtures = {}
 
     def get_commands(self, key):
         try:
@@ -60,6 +61,22 @@ class Registry(object):
         else:
             key = (cli,)
         self.register(func, func.__name__, key, aliases)
+
+    def get_fixture(self, key, state):
+        try:
+            fixture = self._fixtures[key]
+        except KeyError:
+            return None
+        return fixture(state)
+
+    def is_fixture(self, key):
+        return key in self._fixtures.keys()
+
+    def register_fixture(self, func, name):
+        LOG.debug('registering fixture "%s"', name)
+        if name in self._fixtures.keys():
+            raise ValueError("{0} already a registered fixture".format(name))
+        self._fixtures[name] = func
 
 
 registry = Registry()
@@ -113,3 +130,13 @@ def command(*args, **kwargs):
         registry.register(func, name, key, aliases)
         return func
     return register if invoked else register(func)
+
+
+def fixture(func, *args, **kwargs):
+    """
+    Decorator for a function that will be called ahead of the execution
+    of a command that provides a return value to fill the commands
+    argument with
+    """
+    registry.register_fixture(func, func.__name__)
+    return func

@@ -30,12 +30,18 @@ def cleanup_data(data):
         new_data[k] = v
     return DotifyDict(new_data)
 
+def get_command_args(command):
+    args = [a for a in getargspec(command).args if a not in registry._fixtures.keys() and a != 'cli']
+    return args
 
-def get_command_spec(command):
+def get_command_spec(command, without_fixtures=True):
     spec = getargspec(command)
     positional = [None] * (len(spec.args) - len(spec.defaults or []))
     kwargs = getcallargs(command, *positional)
     kwargs.pop('cli')
+    if without_fixtures:
+        for name in registry._fixtures.keys():
+            kwargs.pop(name)
     return kwargs
 
 
@@ -102,10 +108,19 @@ class BaseCommand(StateMixin):
             k = k.replace('-', '_')
             k = k.replace('<', '')
             k = k.replace('>', '')
+            # check if arg
             if v is None:
                 v = new_kwargs[k] or command_kwargs[k] or None
             if k in command_kwargs:
                 new_kwargs[k] = v
+        return new_kwargs
+
+    def get_fixture_args(self, command, state):
+        new_kwargs = {}
+        command_kwargs = get_command_spec(command, without_fixtures=False)
+        for k, v in sorted(command_kwargs.items()):
+            if registry.is_fixture(k):
+                new_kwargs[k] = registry.get_fixture(k, state)
         return new_kwargs
 
     def get_options(self, argv):
@@ -136,6 +151,9 @@ class BaseCommand(StateMixin):
         kwargs = self.format_command_args(command, command_options)
         state.add_options(kwargs)
         state.compile()
+        
+        fixture_kwargs = self.get_fixture_args(command, state)
+        kwargs.update(fixture_kwargs)        
 
         if state.debug:
             LOG.debug("State:\n{0}".format(state))
@@ -233,7 +251,7 @@ class AutoDocCommand(BaseCommand):
         docstring = ""
         if "Usage:" not in command.__doc__:
             docstring += "Usage:\n    {0} [options]\n".format(name)
-            args = getargspec(command).args
+            args = get_command_args(command)
             spec = get_command_spec(command)
             if 'cli' in args:
                 args = args[1:]
