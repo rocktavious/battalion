@@ -15,4 +15,4 @@ def enable_logging(root_logger_name, fmt=SIMPLE, level=logging.DEBUG):
                             level=level)
         logging_setup = True
         for handler in logging.root.handlers:
-            handler.addFilter(logging.Filter(root_logger_name))  
+            handler.addFilter(logging.Filter(root_logger_name))

@@ -1,4 +1,7 @@
+import sys
+import pytest
 from battalion.api import *
+from battalion.exceptions import *
 
 
 class DB(object):
@@ -62,5 +65,32 @@ class myhandler(Handler):
         cli.greeting(name=name)
 
 
-if __name__ == "__main__":
-    mycli.main()
+@pytest.fixture
+def cli():
+    return mycli()
+
+def dispatch(cli, argv=None):
+    try:
+        return cli(argv)
+    except SystemExit:
+        return
+
+def test_main(cli, capsys):
+    rv = dispatch(cli, '--help')
+    out, err = capsys.readouterr()
+    assert cli.docstring in out
+
+def test_version(cli, capsys):
+    dispatch(cli, '--version')
+    out, err = capsys.readouterr()
+    assert '0.0.1' in out
+
+def test_hello(cli, capsys):
+    rv = dispatch(cli, 'myhandler hello Kyle')
+    out, err = capsys.readouterr()
+    assert 'Hello Kyle!' in out
+
+def test_nosuchcommand_exception(cli, capsys):
+    rv = dispatch(cli, 'hello')
+    out, err = capsys.readouterr()
+    assert 'No such command: hello' in out        

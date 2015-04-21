@@ -5,9 +5,8 @@ import logging
 import six
 import yaml
 import traceback
-from functools import partial
 from inspect import getdoc, cleandoc, isclass, getargspec, getcallargs
-from pyul.coreUtils import DotifyDict, get_class_name
+from pyul.coreUtils import DotifyDict
 from docopt import docopt
 
 from .exceptions import NoSuchCommand
@@ -58,7 +57,7 @@ def parse_doc_section(name, source):
 
 
 class CommandInvocation(object):
-    
+
     def __init__(self, cmd):
         self.command = cmd
 
@@ -330,7 +329,7 @@ class CLI(AutoDocCommand):
     @classmethod
     def main(cls, argv=None):
         if argv is None:
-            argv = sys.argv[1:]            
+            argv = sys.argv[1:]
         rv = cls()(*argv)
         if rv:
             print rv
@@ -373,7 +372,7 @@ class CLI(AutoDocCommand):
             else:
                 return CommandInvocation(cmd)
         raise AttributeError
-    
+
     def __getattribute__(self, name):
         command = object.__getattribute__(self, name)
         commands = registry.get_commands((object.__getattribute__(self, '__class__').__name__,))
