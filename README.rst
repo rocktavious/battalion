@@ -41,7 +41,7 @@ In mycli.py script:
     class DB(object):
         
         def __init__(self, state):
-            self.msg = state.git_msg
+            self.msg = state.msg
     
         def myfunc(self):
             return self.msg
