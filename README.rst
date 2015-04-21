@@ -36,6 +36,18 @@ In mycli.py script:
 .. code-block:: python
 
     from battalion.api import *
+
+    class DB(object):
+        
+        def __init__(self, state):
+            self.msg = state.git_msg
+    
+        def myfunc(self):
+            print self.msg
+    
+    @fixture
+    def db(state):
+        return DB(state)
     
     class mycli(CLI):    
         """
@@ -43,17 +55,21 @@ In mycli.py script:
         """
         class State:
             version = '0.0.1'
+            msg = ""
         
-        def normal_function(self, val):
+        def normal_function(self, db, data):
             """Takes in data and outputs new data"""
-            return "Josh"
-    
-    @command
-    def greeting(cli, name="Hello"):
-        """
-        Prints "{name} World!"
-        """
-        print "{0} World!".format(name)
+            if data is None:
+                return db.myfunc()
+            else:
+                return data
+        
+        @command
+        def greeting(cli, name="Hello"):
+            """
+            Prints "Hello {name}!"
+            """
+            print "Hello {0}!".format(name)
 
     class myhandler(Handler):
         """
@@ -62,13 +78,19 @@ In mycli.py script:
         class State:
             version = '0.0.2'  # Handlers can have their own versioning
             cli = 'mycli'
-    
+            msg = "World"
+
         @command
-        def hello(cli, data=None):
+        def validate(cli, data):
+            return data
+        
+        @command
+        def hello(cli, msg=None):
             """
-            Prints "Hello, World!"
+            Prints "Hello World!"
             """
-            name = cli.normal_function(data)
+            name = cli.normal_function(data=msg)
+            name = cli.myhandler.validate(data=name)
             cli.greeting(name=name)
 
     if __name__ == "__main__":
@@ -78,13 +100,11 @@ Then on the commandline
 
 .. code-block:: bash
 
-    $ python mycli.py myhandler hello --data="Blah"
-    > Josh World!
+    $ python mycli.py myhandler hello
+    > Hello World!
     $ #or if installed as a console script
-    $ mycli myhandler hello --data="Blah"
-    > Josh World!
-
-Change Log
-
-.. include:: ./ChangeLog
-        :literal:
+    $ mycli myhandler hello
+    > Hello World!
+    $ #also
+    $ mycli myhandler hello "Josh"
+    > Hello Josh!

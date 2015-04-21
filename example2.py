@@ -30,7 +30,7 @@ class myCLI(CLI):
         cli.log.info("{0} World!".format(name))
         git.myfunc()
         cli.log.info("Fixture: {0}".format(git))
-        cli('hello2 --name MYVALUE')
+        cli.hello2(name='MYVALUE')
 
     @command
     def hello2(cli, git, name="Hello"):

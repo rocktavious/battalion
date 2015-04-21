@@ -7,7 +7,7 @@ import yaml
 import traceback
 from functools import partial
 from inspect import getdoc, cleandoc, isclass, getargspec, getcallargs
-from pyul.coreUtils import DotifyDict
+from pyul.coreUtils import DotifyDict, get_class_name
 from docopt import docopt
 
 from .exceptions import NoSuchCommand
@@ -44,7 +44,10 @@ def get_command_spec(command, without_fixtures=True):
     kwargs.pop('cli')
     if without_fixtures:
         for name in registry._fixtures.keys():
-            kwargs.pop(name)
+            try:
+                kwargs.pop(name)
+            except KeyError:
+                pass
     return kwargs
 
 
@@ -52,6 +55,21 @@ def parse_doc_section(name, source):
     pattern = re.compile('^([^\n]*' + name + '[^\n]*\n?(?:[ \t].*?(?:\n|$))*)',
                          re.IGNORECASE | re.MULTILINE)
     return [s.strip() for s in pattern.findall(source)]
+
+
+class CommandInvocation(object):
+    
+    def __init__(self, cmd):
+        self.command = cmd
+
+    def __call__(self, *args, **kwargs):
+        command_kwargs = get_command_spec(self.command, without_fixtures=False)
+        for k, v in sorted(command_kwargs.items()):
+            if registry.is_fixture(k):
+                kwargs[k] = registry.get_fixture(k, state)
+        if state.debug:
+            LOG.debug("State:\n{0}".format(state))
+        return self.command(state.cli, *args, **kwargs)
 
 
 class BaseCommand(StateMixin):
@@ -118,14 +136,6 @@ class BaseCommand(StateMixin):
                 new_kwargs[k] = v
         return new_kwargs
 
-    def get_fixture_args(self, command, state):
-        new_kwargs = {}
-        command_kwargs = get_command_spec(command, without_fixtures=False)
-        for k, v in sorted(command_kwargs.items()):
-            if registry.is_fixture(k):
-                new_kwargs[k] = registry.get_fixture(k, state)
-        return new_kwargs
-
     def get_options(self, argv):
         options = docopt(self.docstring,
                          argv,
@@ -152,13 +162,9 @@ class BaseCommand(StateMixin):
     def run(self, command, args):
         command_options = docopt(cleandoc(command.__autodoc__), args)
         kwargs = self.format_command_args(command, command_options)
-        state.add_options(kwargs)
         state.compile()
-        fixture_kwargs = self.get_fixture_args(command, state)
-        kwargs.update(fixture_kwargs)
-        if state.debug:
-            LOG.debug("State:\n{0}".format(state))
-        return command(state.cli, **kwargs)
+        c = CommandInvocation(command)
+        return c(**kwargs)
 
 
 class AutoDocCommand(BaseCommand):
@@ -250,7 +256,7 @@ class AutoDocCommand(BaseCommand):
 
     def generate_command_usage(self, name, command):
         docstring = ""
-        if "Usage:" not in command.__doc__:
+        if command.__doc__ is None or "Usage:" not in command.__doc__:
             docstring += "Usage:\n    {0} [options]\n".format(name)
             args = get_command_args(command)
             spec = get_command_spec(command)
@@ -269,7 +275,7 @@ class AutoDocCommand(BaseCommand):
 
     def generate_command_options(self, command):
         docstring = ""
-        if "Options:" not in command.__doc__:
+        if command.__doc__ is None or "Options:" not in command.__doc__:
             args = get_command_spec(command)
             if args:
                 docstring += "Options:\n"
@@ -290,50 +296,71 @@ class Handler(AutoDocCommand):
     def __init__(self):
         super(Handler, self).__init__()
 
+    def __call__(self, *args, **kwargs):
+        print self.__autodoc__
+
     def __getattr__(self, name):
         if name in self.commands:
-            return partial(self.commands[name], state.cli)
+            cmd = self.commands[name]
+            if isinstance(cmd, Handler):
+                return cmd
+            else:
+                return CommandInvocation(cmd)
         raise AttributeError
+
+    def __getattribute__(self, name):
+        command = object.__getattribute__(self, name)
+        commands = registry.get_commands((state.cli.name, object.__getattribute__(self, '__class__').__name__))
+        if name in commands.keys():
+            cmd = commands[name]
+            if isinstance(cmd, Handler):
+                return cmd
+            else:
+                return CommandInvocation(cmd)
+        return command
 
 
 @six.add_metaclass(CLIRegistrationMixin)
 class CLI(AutoDocCommand):
     class State:
         options = [('-d, --debug', 'Show debug messages'),
-                   ('--show-return-value', 'Show the commands return value'),
                    ('--config=<CONFIG>', 'The config filepath [default: {0}]')]
+        cwd = os.getcwd()
 
     @classmethod
     def main(cls, argv=None):
-        return cls()(argv)
+        if argv is None:
+            argv = sys.argv[1:]            
+        rv = cls()(*argv)
+        if rv:
+            print rv
+        return rv
 
     def __init__(self):
         self.log = logging.getLogger(self.name)
         state.cli = self
         super(CLI, self).__init__()
 
-    def __call__(self, argv=None):
+    def __call__(self, *args):
         rv = None
         state.reinit()
         self.setup_logging()
-        if argv is None:
-            argv = sys.argv[1:]
         try:
-            rv = self.dispatch(argv=argv)
+            rv = self.dispatch(argv=" ".join(args))
         except KeyboardInterrupt:
-            LOG.error("\nAborting.")
+            print "\nAborting."
             sys.exit(1)
         except NoSuchCommand as e:
-            LOG.error("No such command: %s", e.command)
-            LOG.error("")
-            LOG.error("\n".join(parse_doc_section("commands:", getdoc(e.supercommand))))
+            print "No such command: {0}".format(e.command)
+            print "\n".join(parse_doc_section("commands:", getdoc(e.supercommand)))
             sys.exit(1)
-        except Exception as e:
-            LOG.error("\n{0}".format(traceback.format_exc()))
-            sys.exit(1)
+        except:
+            traceback.print_exc()
+            if hasattr(e, 'code'):
+                sys.exit(e.code)
+            else:
+                sys.exit(1)
         finally:
-            if '--show-return-value' in argv:
-                print rv
             return rv
 
     def __getattr__(self, name):
@@ -342,15 +369,26 @@ class CLI(AutoDocCommand):
             if isinstance(cmd, Handler):
                 return cmd
             else:
-                return partial(cmd, self)
+                return CommandInvocation(cmd)
         raise AttributeError
+    
+    def __getattribute__(self, name):
+        command = object.__getattribute__(self, name)
+        commands = registry.get_commands((object.__getattribute__(self, '__class__').__name__,))
+        if name in commands.keys():
+            cmd = commands[name]
+            if isinstance(cmd, Handler):
+                return cmd
+            else:
+                return CommandInvocation(cmd)
+        return command
 
     @property
     def key(self):
         return (self.name,)
 
     def setup_logging(self):
-        enable_logging(level=logging.INFO)
+        enable_logging(self.name, level=logging.INFO)
 
     def dispatch(self, argv):
         options = self.get_options(argv)
