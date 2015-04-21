@@ -57,7 +57,7 @@ In mycli.py script:
             version = '0.0.1'
             msg = ""
         
-        def normal_function(self, db, data):
+        def normal_function(self, db, data=None):  # NOTE: the "db" arg will be populated from the "db" fixture function
             """Takes in data and outputs new data"""
             if data is None:
                 return db.myfunc()
