@@ -108,7 +108,7 @@ Then on the commandline
 
     $ python mycli.py myhandler hello
     > Hello World!
-    $ #or if installed as a console script
+    $ #or if installed as a console script via setuptools
     $ mycli myhandler hello
     > Hello World!
     $ #also
