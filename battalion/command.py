@@ -130,8 +130,8 @@ class BaseCommand(StateMixin):
             k = k.replace('<', '')
             k = k.replace('>', '')
             # check if arg
-            if v is None:
-                v = new_kwargs[k] or command_kwargs[k] or None
+            if v is None or v == 'None':
+                v = new_kwargs.get(k, None) or command_kwargs.get(k, None) or None
             if k in command_kwargs:
                 new_kwargs[k] = v
         return new_kwargs
@@ -354,6 +354,8 @@ class CLI(AutoDocCommand):
             print "No such command: {0}".format(e.command)
             print "\n".join(parse_doc_section("commands:", getdoc(e.supercommand)))
             sys.exit(1)
+        except SystemExit as e:
+            sys.exit(e.code)
         except:
             traceback.print_exc()
             if hasattr(e, 'code'):
