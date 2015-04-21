@@ -29,7 +29,7 @@ class State(DotifyDict):
         self.config_list.append(config)
 
     def compile(self):
-        for state in reversed(self.state_list):
+        for state in self.state_list:
             self.update(state)
 
         for config in self.config_list:
