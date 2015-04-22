@@ -5,9 +5,10 @@ import logging
 import six
 import yaml
 import traceback
+from contextlib import contextmanager
 from inspect import getdoc, cleandoc, isclass, getargspec, getcallargs
 from pyul.coreUtils import DotifyDict
-from docopt import docopt
+from docopt import docopt, DocoptExit
 
 from .exceptions import NoSuchCommand
 from .registry import CLIRegistrationMixin, HandlerRegistrationMixin, registry
@@ -68,7 +69,12 @@ class CommandInvocation(object):
                 kwargs[k] = registry.get_fixture(k, state)
         if state.debug:
             LOG.debug("State:\n{0}".format(state))
-        return self.command(state.cli, *args, **kwargs)
+        if state.get('dryrun_context', False) is False:
+            return self.command(state.cli, *args, **kwargs)
+        else:
+            if state.get('dryrun_log', False):
+                state.cli.log.info(' DRYRUN:\n\tCOMMAND: {0}\n\tARGS: {1}\n\tKWARGS: {2}'.format(self.command.__name__, args, kwargs))
+            return state.get('dryrun_val', None)
 
 
 class BaseCommand(StateMixin):
@@ -81,8 +87,13 @@ class BaseCommand(StateMixin):
         version = 'UNKNOWN'
         default_config = None
         config_file = None
+        dryrun = False
+        state.dryrun_context = False
+        state.dryrun_val = None
+        state.dryrun_log = False
         options = [('-h, --help', 'Show this screen.'),
-                   ('--version', 'Show version.')]
+                   ('--version', 'Show version.'),
+                   ('--dryrun', 'If enabled any modifying actions will not be performed [default: False]')]
 
     @property
     def name(self):
@@ -351,6 +362,9 @@ class CLI(AutoDocCommand):
             print "No such command: {0}".format(e.command)
             print "\n".join(parse_doc_section("commands:", getdoc(e.supercommand)))
             sys.exit(1)
+        except DocoptExit as e:
+            print e.message
+            sys.exit(1)
         except SystemExit as e:
             sys.exit(e.code)
         except:
@@ -406,3 +420,15 @@ class CLI(AutoDocCommand):
             with open(self._state.config_file, 'r') as ymlfile:
                 config = DotifyDict(data=yaml.load(ymlfile))
                 state.add_config(cleanup_data(config))
+
+
+@contextmanager
+def dryrun(value=None, log=False):
+    if state.dryrun:
+        state.dryrun_context = True
+        state.dryrun_val = value
+        state.dryrun_log = log
+    try:
+        yield
+    finally:
+        state.dryrun_context = False

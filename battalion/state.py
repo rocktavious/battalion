@@ -35,7 +35,7 @@ class State(DotifyDict):
         for config in self.config_list:
             self.update(config)
 
-        for option in self.options_list:
+        for option in reversed(self.options_list):
             self.update(option)
 
         self.pop('state_list')

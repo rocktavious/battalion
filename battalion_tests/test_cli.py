@@ -72,8 +72,10 @@ class myhandler(Handler):
         """
         Prints "Hello World!"
         """
-        name = cli.normal_function(data=msg)
-        name = cli.myhandler.validate(data=name)
+        with dryrun(cli.state.msg):
+            name = cli.normal_function(data=msg)
+        with dryrun(name):
+            name = cli.myhandler.validate(data=name)
         cli.greeting(name=name)
 
 class myhandler2(Handler):
@@ -96,7 +98,9 @@ def multi_bind(cli, name="NAME"):
     """
     Prints {name}!
     """
-    print name
+    with dryrun('NAME'):
+        name = cli.normal_function(data=name)
+        print name
     
 registry.bind(multi_bind, 'mycli', 'myhandler2')
 registry.bind(multi_bind, 'acli')
@@ -131,6 +135,11 @@ def test_hello(cli, capsys):
     rv = dispatch(cli, 'myhandler hello Kyle')
     out, err = capsys.readouterr()
     assert 'Hello Kyle!' in out
+
+def test_hello_dryrun(cli, capsys):
+    rv = dispatch(cli, '--dryrun myhandler hello Kyle')
+    out, err = capsys.readouterr()
+    assert 'Hello World!' in out
 
 def test_alias(cli, capsys):
     rv = dispatch(cli, 'myhandler greeting Kyle')
