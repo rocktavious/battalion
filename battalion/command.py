@@ -259,8 +259,6 @@ class AutoDocCommand(BaseCommand):
             docstring += "Usage:\n    {0} [options]\n".format(name)
             args = get_command_args(command)
             spec = get_command_spec(command)
-            if 'cli' in args:
-                args = args[1:]
             if args:
                 docstring += "    {0} ".format(name)
                 for arg_name in args:

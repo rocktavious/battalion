@@ -1,6 +1,6 @@
 import logging
 import types
-from decorator import decorator
+from functools import wraps
 from inspect import isclass
 
 
@@ -134,15 +134,26 @@ def command(*args, **kwargs):
     return register if invoked else register(func)
 
 
-def _memoize(func, *args, **kw):
-    cache = func.cache  # attributed added by memoize
-    if func in cache:
-        return cache[func]
-    else:
-        cache[func] = result = func(*args, **kw)
-        return result
+def doublewrap(f):
+    '''
+    a decorator decorator, allowing the decorator to be used as:
+    @decorator(with, arguments, and=kwargs)
+    or
+    @decorator
+    '''
+    @wraps(f)
+    def new_dec(*args, **kwargs):
+        if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
+            # actual decorated function
+            return f(args[0])
+        else:
+            # decorator arguments
+            return lambda realf: f(realf, *args, **kwargs)
+
+    return new_dec
 
 
+@doublewrap
 def fixture(func, memoize=True):
     """
     Decorator for a function that will be called ahead of the execution
@@ -151,9 +162,17 @@ def fixture(func, memoize=True):
 
     Fixtures memoize their results by default.
     """
+    @wraps(func)
+    def wrap(*args, **kwargs):
+        cache = func.cache  # attributed added by memoize
+        if func in cache:
+            return cache[func]
+        else:
+            cache[func] = result = func(*args, **kwargs)
+            return result
     if memoize:
         func.cache = {}
-        new_func = decorator(_memoize, func)
+        new_func = wrap
     else:
         new_func = func
     registry.register_fixture(new_func, func.__name__)
