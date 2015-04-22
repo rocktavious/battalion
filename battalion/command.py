@@ -5,7 +5,6 @@ import logging
 import six
 import yaml
 import traceback
-from contextlib import contextmanager
 from inspect import getdoc, cleandoc, isclass, getargspec, getcallargs
 from pyul.coreUtils import DotifyDict
 from docopt import docopt, DocoptExit
@@ -69,12 +68,7 @@ class CommandInvocation(object):
                 kwargs[k] = registry.get_fixture(k, state)
         if state.debug:
             LOG.debug("State:\n{0}".format(state))
-        if state.get('dryrun_context', False) is False:
-            return self.command(state.cli, *args, **kwargs)
-        else:
-            if state.get('dryrun_log', False):
-                state.cli.log.info(' DRYRUN:\n\tCOMMAND: {0}\n\tARGS: {1}\n\tKWARGS: {2}'.format(self.command.__name__, args, kwargs))
-            return state.get('dryrun_val', None)
+        return self.command(state.cli, *args, **kwargs)
 
 
 class BaseCommand(StateMixin):
@@ -87,13 +81,8 @@ class BaseCommand(StateMixin):
         version = 'UNKNOWN'
         default_config = None
         config_file = None
-        dryrun = False
-        state.dryrun_context = False
-        state.dryrun_val = None
-        state.dryrun_log = False
         options = [('-h, --help', 'Show this screen.'),
-                   ('--version', 'Show version.'),
-                   ('--dryrun', 'If enabled any modifying actions will not be performed [default: False]')]
+                   ('--version', 'Show version.')]
 
     @property
     def name(self):
@@ -332,7 +321,8 @@ class Handler(AutoDocCommand):
 class CLI(AutoDocCommand):
     class State:
         options = [('-d, --debug', 'Show debug messages'),
-                   ('--config=<CONFIG>', 'The config filepath [default: {0}]')]
+                   ('--config=<CONFIG>', 'The config filepath [default: {0}]'),
+                   ('--dryrun', 'If enabled any modifying actions will not be performed [default: False]')]
         cwd = os.getcwd()
 
     @classmethod
@@ -422,13 +412,17 @@ class CLI(AutoDocCommand):
                 state.add_config(cleanup_data(config))
 
 
-@contextmanager
-def dryrun(value=None, log=False):
-    if state.dryrun:
-        state.dryrun_context = True
-        state.dryrun_val = value
-        state.dryrun_log = log
-    try:
-        yield
-    finally:
-        state.dryrun_context = False
+def dryrun(f, value=None):
+    def wrapper(*args, **kwargs):
+        if state.dryrun is True:
+            if isinstance(f, CommandInvocation):
+                name = f.command.__name__
+            else:
+                name = f.__name__
+            args = ','.join(list(args) + ["%s=%s" % (k, v) for (k, v) in kwargs.iteritems()])
+            dryrun_logger = logging.getLogger(state.cli.name + '.dryrun')
+            dryrun_logger.debug("DRYRUN: {0}({1})".format(name, args))
+            return value
+        else:
+            return f(*args, **kwargs)
+    return wrapper

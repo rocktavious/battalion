@@ -72,10 +72,8 @@ class myhandler(Handler):
         """
         Prints "Hello World!"
         """
-        with dryrun(cli.state.msg):
-            name = cli.normal_function(data=msg)
-        with dryrun(name):
-            name = cli.myhandler.validate(data=name)
+        name = dryrun(cli.normal_function, cli.state.msg)(data=msg)
+        name = dryrun(cli.myhandler.validate, name)(data=name)
         cli.greeting(name=name)
 
 class myhandler2(Handler):
@@ -98,9 +96,8 @@ def multi_bind(cli, name="NAME"):
     """
     Prints {name}!
     """
-    with dryrun('NAME'):
-        name = cli.normal_function(data=name)
-        print name
+    name = dryrun(cli.normal_function, 'NAME')(data=name)
+    print name
     
 registry.bind(multi_bind, 'mycli', 'myhandler2')
 registry.bind(multi_bind, 'acli')
