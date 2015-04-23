@@ -16,16 +16,22 @@ from .log import enable_logging
 
 LOG = logging.getLogger(__name__)
 
+def cleanup_key(k):
+    if k.startswith('--'):
+        k = k[2:]
+    if k.startswith('-'):
+        k = k[1:]
+    k = k.replace('-', '_')
+    k = k.replace('<', '')
+    k = k.replace('>', '')
+    return k
+
 
 def cleanup_data(data):
     new_data = {}
     for k, v in data.items():
-        if k.startswith('--'):
-            k = k[2:]
-        if k.startswith('-'):
-            k = k[1:]
-        k = k.replace('-', '_')
-        if k in ['help', 'version', 'cli', 'options', 'column_padding', 'default_config', 'config']:
+        k = cleanup_key(k)
+        if k in ['help', 'args', 'command', 'cli', 'options', 'column_padding', 'default_config', 'config']:
             continue
         new_data[k] = v
     return DotifyDict(new_data)
@@ -71,7 +77,7 @@ class CommandInvocation(object):
         return self.command(state.cli, *args, **kwargs)
 
 
-class BaseCommand(StateMixin):
+class BaseCLI(StateMixin):
     """
     Base class for battalion commandline app
     """
@@ -79,8 +85,6 @@ class BaseCommand(StateMixin):
     class State:
         cli = None
         version = 'UNKNOWN'
-        default_config = None
-        config_file = None
         options = [('-h, --help', 'Show this screen.'),
                    ('--version', 'Show version.')]
 
@@ -89,12 +93,8 @@ class BaseCommand(StateMixin):
         return self.__class__.__name__
 
     @property
-    def handler(self):
-        return None
-
-    @property
     def cli(self):
-        return self._state.cli
+        return state[self.name].cli
 
     @property
     def key(self):
@@ -115,19 +115,13 @@ class BaseCommand(StateMixin):
     @property
     def docopt_options(self):
         return {'options_first': True,
-                'version': self._state.version}
+                'version': state[self.name].version}
 
     def format_command_args(self, command, kwargs):
         new_kwargs = {}
         command_kwargs = get_command_spec(command)
         for k, v in sorted(kwargs.items()):
-            if k.startswith('--'):
-                k = k[2:]
-            if k.startswith('-'):
-                k = k[1:]
-            k = k.replace('-', '_')
-            k = k.replace('<', '')
-            k = k.replace('>', '')
+            k = cleanup_key(k)
             # check if arg
             if v is None or v == 'None':
                 v = new_kwargs.get(k, None) or command_kwargs.get(k, None) or None
@@ -149,29 +143,29 @@ class BaseCommand(StateMixin):
             command = self.commands[command_name]
         except KeyError:
             raise NoSuchCommand(command_name, self)
-        state.add_state(cleanup_data(self._state))
-        state.add_options(cleanup_data(options))
         return command, args
 
     def dispatch(self, argv):
         options = self.get_options(argv)
+        state.add_state(self.name, cleanup_data(options))
         command, args = self.get_command(options)
         return self.run(command, args)
 
     def run(self, command, args):
         command_options = docopt(cleandoc(command.__autodoc__), args)
         kwargs = self.format_command_args(command, command_options)
-        state.compile()
+        state.apply()
         c = CommandInvocation(command)
         return c(**kwargs)
 
 
-class AutoDocCommand(BaseCommand):
+class AutoDocCommand(BaseCLI):
     """
     Class that supports generating the docopt docstrings for the class and
     it's command functions.
     """
     class State:
+        default_config = None
         column_padding = 30
 
     def __init__(self):
@@ -229,27 +223,29 @@ class AutoDocCommand(BaseCommand):
     def generate_options(self):
         if "Options:" not in self.__doc__:
             docstring = "Options:\n"
-            for flags, desc in self._state.options:
+            s = state[self.name]
+            for flags, desc in s.options:
                 if flags == '--config=<CONFIG>' and flags not in docstring:
                     if isinstance(self, CLI):
-                        if self._state.default_config is None:
-                            self._state.default_config = '~/.{name}/{name}.yaml'.format(name=self.name)
-                        desc = desc.format(self._state.default_config)
+                        if s.default_config is None:
+                            s.default_config = '~/.{name}/{name}.yaml'.format(name=self.name)
+                        desc = desc.format(s.default_config)
                     else:
                         continue
                 docstring += "    {0:<{2}} {1}\n".format(flags,
                                                          desc,
-                                                         self._state.column_padding)
+                                                         s.column_padding)
             docstring += "\n"
         return docstring
 
     def generate_commands(self):
         if "Commands:" not in self.__doc__:
+            s = state[self.name]
             docstring = "Commands:\n"
             for k, v in self.commands.items():
                 docstring += "    {0:<{2}} {1}\n".format(k,
                                                          getdoc(v),
-                                                         self._state.column_padding)
+                                                         s.column_padding)
             docstring += "\n"
         return docstring
 
@@ -273,6 +269,7 @@ class AutoDocCommand(BaseCommand):
     def generate_command_options(self, command):
         docstring = ""
         if command.__doc__ is None or "Options:" not in command.__doc__:
+            s = state[self.name]
             args = get_command_spec(command)
             if args:
                 docstring += "Options:\n"
@@ -282,7 +279,7 @@ class AutoDocCommand(BaseCommand):
                     docstring += "    {0:<{3}} {1} [default: {2}]\n".format(flag_def,
                                                                             ' ',
                                                                             default,
-                                                                            self._state.column_padding)
+                                                                            s.column_padding)
                 docstring += "\n"
         return docstring
 
@@ -320,6 +317,7 @@ class Handler(AutoDocCommand):
 @six.add_metaclass(CLIRegistrationMixin)
 class CLI(AutoDocCommand):
     class State:
+        config_file = None
         options = [('-d, --debug', 'Show debug messages'),
                    ('--config=<CONFIG>', 'The config filepath [default: {0}]'),
                    ('--dryrun', 'If enabled any modifying actions will not be performed [default: False]')]
@@ -341,7 +339,6 @@ class CLI(AutoDocCommand):
 
     def __call__(self, *args):
         rv = None
-        state.reinit()
         self.setup_logging()
         try:
             rv = self.dispatch(argv=" ".join(args))
@@ -405,9 +402,9 @@ class CLI(AutoDocCommand):
 
     def load_config(self, options):
         config_filepath = os.path.expanduser(options['--config'])
-        self._state.config_file = config_filepath
+        state[self.name].config_file = config_filepath
         if os.path.exists(config_filepath):
-            with open(self._state.config_file, 'r') as ymlfile:
+            with open(config_filepath, 'r') as ymlfile:
                 config = DotifyDict(data=yaml.load(ymlfile))
                 state.add_config(cleanup_data(config))
 
