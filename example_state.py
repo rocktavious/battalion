@@ -9,13 +9,18 @@ class mycli(CLI):
     class State:
         version = '0.0.1'
         url = None
-        options = [('--url=<URL>', 'The url for the thing')]
+        options = [('--url=<URL>', 'The url for the thing'),
+                   ('--bool', 'Should Print True [default: True]')]
 
     @command
     def run_tests(cli, name):
         cli('test')
         cli('myhandler test')
         cli('myhandler2 test')
+
+    @command
+    def test2(cli):
+        print cli.state.bool
 
     @command
     def test(cli):
@@ -59,4 +64,4 @@ class myhandler2(Handler):
 
 
 if __name__ == "__main__":
-    mycli()('--url="FTP://" test')
+    mycli()('test2')

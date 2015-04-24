@@ -18,6 +18,8 @@ LOG = logging.getLogger(__name__)
 
 
 def cleanup_key(k):
+    if k in ['<command>', '<args>']:
+        return k
     if k.startswith('--'):
         k = k[2:]
     if k.startswith('-'):
@@ -112,8 +114,7 @@ class BaseCLI(StateMixin):
         new_data = {}
         for k, v in data.items():
             k = cleanup_key(k)
-            if k in state[self.name].keys():
-                new_data[k] = True if v == 'True' else v
+            new_data[k] = True if v == 'True' else v
         return DotifyDict(new_data)
 
     def format_command_args(self, command, kwargs):
@@ -393,8 +394,9 @@ class CLI(AutoDocCommand):
 
     def dispatch(self, argv):
         options = self.get_options(argv)
+        options = self.cleanup_data(options)
         self.load_config(options)
-        state.add_state(self.name, self.cleanup_data(options))
+        state.add_state(self.name, options)
         command, args = self.get_command(options)
         if isinstance(command, Handler):
             return command.dispatch(args)
@@ -403,7 +405,7 @@ class CLI(AutoDocCommand):
             return super(CLI, self).dispatch(argv)
 
     def load_config(self, options):
-        config_filepath = os.path.expanduser(options['--config'])
+        config_filepath = os.path.abspath(os.path.expanduser(options.config))
         state[self.name].config = config_filepath
         if os.path.exists(config_filepath):
             with open(config_filepath, 'r') as ymlfile:
