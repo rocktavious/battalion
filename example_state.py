@@ -2,8 +2,6 @@ from battalion.api import *
 from battalion.log import enable_logging
 from pprint import pprint
 
-enable_logging('')
-
 class mycli(CLI):    
     """
     Toplevel program - mycli
@@ -35,7 +33,10 @@ class myhandler(Handler):
         cli = 'mycli'
         static_var = "Kyle"
         url = 'http://google.com'
-        options = [('--url2=<URL>', 'The url for the thing')]
+        options = [('--url=<URL>', 'The url for the thing')]
+    
+    def __init__(self, *args, **kwargs):
+        super(Handler, self).__init__(*args, **kwargs)
 
     @command
     def test(cli):
@@ -58,4 +59,4 @@ class myhandler2(Handler):
 
 
 if __name__ == "__main__":
-    mycli()('test')
+    mycli()('--url="FTP://" test')

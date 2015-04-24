@@ -1,4 +1,5 @@
 import logging
+from copy import deepcopy
 from pyul.coreUtils import DotifyDict
 
 
@@ -17,13 +18,16 @@ class State(DotifyDict):
         self.cli = None
 
     def _apply_state(self, namespace, data):
-        if not self.has_key(namespace):
+        if namespace not in self:
             self[namespace] = DotifyDict()
         for k, v in data.items():
-            self[namespace][k] = v
+            self[namespace][k] = v if v else self[namespace].get(k, v)
 
     def add_state(self, namespace, state):
         log.debug('Adding state {0}'.format(namespace))
+        if namespace == self.cli.name:
+            for k, v in state.items():
+                self[k] = v if v else self.get(k, v)
         self._apply_state(namespace, state)
 
     def add_config(self, config):
@@ -33,8 +37,8 @@ class State(DotifyDict):
             elif k is self.cli.name:
                 self._apply_state(self.cli.name, v)
             else:
-                self[k] = v
-    
+                self[k] = v if v else self.get(k, v)
+
     def apply(self):
         self.cli.state = self
 
@@ -56,15 +60,15 @@ class StateMixin(object):
 
         # Merge the State classes into one dict
         for s in states:
-            final_state.update(DotifyDict(dict([x for x in s.__dict__.items()
-                                           if not x[0].startswith("_")])))
+            data = [x for x in s.__dict__.items() if not x[0].startswith("_")]
+            data = DotifyDict(deepcopy(dict(data)))
+            final_state.update(data)
 
         # Update the final state with any kwargs passed in
         for key in final_state.keys():
             if key in kwargs:
                 final_state[key] = kwargs.pop(key)
 
-        #self._state = final_state
         global state
         state.add_state(self.name, final_state)
 

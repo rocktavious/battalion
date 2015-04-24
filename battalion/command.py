@@ -16,6 +16,7 @@ from .log import enable_logging
 
 LOG = logging.getLogger(__name__)
 
+
 def cleanup_key(k):
     if k.startswith('--'):
         k = k[2:]
@@ -25,16 +26,6 @@ def cleanup_key(k):
     k = k.replace('<', '')
     k = k.replace('>', '')
     return k
-
-
-def cleanup_data(data):
-    new_data = {}
-    for k, v in data.items():
-        k = cleanup_key(k)
-        if k in ['help', 'args', 'command', 'cli', 'options', 'column_padding', 'default_config', 'config']:
-            continue
-        new_data[k] = v
-    return DotifyDict(new_data)
 
 
 def get_command_args(command):
@@ -117,6 +108,14 @@ class BaseCLI(StateMixin):
         return {'options_first': True,
                 'version': state[self.name].version}
 
+    def cleanup_data(self, data):
+        new_data = {}
+        for k, v in data.items():
+            k = cleanup_key(k)
+            if k in state[self.name].keys():
+                new_data[k] = True if v == 'True' else v
+        return DotifyDict(new_data)
+
     def format_command_args(self, command, kwargs):
         new_kwargs = {}
         command_kwargs = get_command_spec(command)
@@ -147,7 +146,7 @@ class BaseCLI(StateMixin):
 
     def dispatch(self, argv):
         options = self.get_options(argv)
-        state.add_state(self.name, cleanup_data(options))
+        state.add_state(self.name, self.cleanup_data(options))
         command, args = self.get_command(options)
         return self.run(command, args)
 
@@ -317,10 +316,12 @@ class Handler(AutoDocCommand):
 @six.add_metaclass(CLIRegistrationMixin)
 class CLI(AutoDocCommand):
     class State:
-        config_file = None
+        debug = False
+        config = None
+        dryrun = None
         options = [('-d, --debug', 'Show debug messages'),
                    ('--config=<CONFIG>', 'The config filepath [default: {0}]'),
-                   ('--dryrun', 'If enabled any modifying actions will not be performed [default: False]')]
+                   ('--dryrun=<DRYRUN>', 'If enabled any modifying actions will not be performed [default: False]')]
         cwd = os.getcwd()
 
     @classmethod
@@ -393,6 +394,7 @@ class CLI(AutoDocCommand):
     def dispatch(self, argv):
         options = self.get_options(argv)
         self.load_config(options)
+        state.add_state(self.name, self.cleanup_data(options))
         command, args = self.get_command(options)
         if isinstance(command, Handler):
             return command.dispatch(args)
@@ -402,11 +404,11 @@ class CLI(AutoDocCommand):
 
     def load_config(self, options):
         config_filepath = os.path.expanduser(options['--config'])
-        state[self.name].config_file = config_filepath
+        state[self.name].config = config_filepath
         if os.path.exists(config_filepath):
             with open(config_filepath, 'r') as ymlfile:
                 config = DotifyDict(data=yaml.load(ymlfile))
-                state.add_config(cleanup_data(config))
+                state.add_config(self.cleanup_data(config))
 
 
 def dryrun(f, value=None):

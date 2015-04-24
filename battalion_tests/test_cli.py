@@ -72,7 +72,7 @@ class myhandler(Handler):
         """
         Prints "Hello World!"
         """
-        name = dryrun(cli.normal_function, cli.state.msg)(data=msg)
+        name = dryrun(cli.normal_function, cli.state.myhandler.msg)(data=msg)
         name = dryrun(cli.myhandler.validate, name)(data=name)
         cli.greeting(name=name)
 
@@ -134,7 +134,7 @@ def test_hello(cli, capsys):
     assert 'Hello Kyle!' in out
 
 def test_hello_dryrun(cli, capsys):
-    rv = dispatch(cli, '--dryrun myhandler hello Kyle')
+    rv = dispatch(cli, '--dryrun=True myhandler hello Kyle')
     out, err = capsys.readouterr()
     assert 'Hello World!' in out
 
@@ -158,4 +158,4 @@ def test_multi_bind(cli, capsys):
     assert 'NAME' in out
 
 if __name__ == "__main__":
-    mycli.main()
+    mycli()('--dryrun=True myhandler hello Kyle')
