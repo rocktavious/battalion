@@ -8,9 +8,8 @@ class mycli(CLI):
     """
     class State:
         version = '0.0.1'
-        url = None
-        options = [('--url=<URL>', 'The url for the thing'),
-                   ('--bool', 'Should Print True [default: True]')]
+        options = [('--url=<URL>', 'The url for the thing [default: HTTP]'),
+                   ('--bool', 'Should Print True')]
 
     @command
     def run_tests(cli, name):
@@ -20,7 +19,7 @@ class mycli(CLI):
 
     @command
     def test2(cli):
-        print cli.state.bool
+        print cli.state.url
 
     @command
     def test(cli):

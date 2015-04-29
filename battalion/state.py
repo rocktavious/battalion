@@ -13,9 +13,13 @@ class State(DotifyDict):
      - config settings | by the users environment from a configuration file
     To produce a final "state" of the configuration at runtime
     """
+    _instances = {}
 
-    def __init__(self):
-        self.cli = None
+    def __init__(self, cli):
+        self.cli = cli
+        self.cli_name = cli.__class__.__name__
+        self.cli.log = logging.getLogger(self.cli_name)
+        self.cli.state = self
 
     def _apply_state(self, namespace, data):
         if namespace not in self:
@@ -25,9 +29,9 @@ class State(DotifyDict):
 
     def add_state(self, namespace, state):
         log.debug('Adding state {0}'.format(namespace))
-        if namespace == self.cli.name:
+        if namespace == self.cli_name:
             for k, v in state.items():
-                self[k] = v if v else self.get(k, v)
+                self[k] = v if v is not None else self.get(k, v)
         self._apply_state(namespace, state)
 
     def add_config(self, config):
@@ -38,11 +42,6 @@ class State(DotifyDict):
                 self._apply_state(self.cli.name, v)
             else:
                 self[k] = v if v else self.get(k, v)
-
-    def apply(self):
-        self.cli.state = self
-
-state = State()
 
 
 class StateMixin(object):
@@ -69,7 +68,6 @@ class StateMixin(object):
             if key in kwargs:
                 final_state[key] = kwargs.pop(key)
 
-        global state
-        state.add_state(self.name, final_state)
+        self._state = final_state
 
         super(StateMixin, self).__init__()
