@@ -295,31 +295,7 @@ class CLI(AutoDocCommand):
         State(self)
         super(CLI, self).__init__()
 
-    def __call__(self, *args):
-        rv = None
-        self.setup_logging()
-        try:
-            rv = self.dispatch(argv=" ".join(args))
-        except KeyboardInterrupt:
-            print "\nAborting."
-            sys.exit(1)
-        except NoSuchCommand as e:
-            print "No such command: {0}".format(e.command)
-            print "\n".join(parse_doc_section("commands:", getdoc(e.supercommand)))
-            sys.exit(1)
-        except DocoptExit as e:
-            print e.message
-            sys.exit(1)
-        except SystemExit as e:
-            sys.exit(e.code)
-        except:
-            traceback.print_exc()
-            if hasattr(e, 'code'):
-                sys.exit(e.code)
-            else:
-                sys.exit(1)
-        finally:
-            return rv
+
 
     def __getattribute__(self, name):
         command = object.__getattribute__(self, name)
@@ -354,19 +330,3 @@ class CLI(AutoDocCommand):
             with open(config_filepath, 'r') as ymlfile:
                 config = DotifyDict(data=yaml.load(ymlfile))
                 state.add_config(cleanup_data(config))
-
-
-def dryrun(f, value=None):
-    def wrapper(*args, **kwargs):
-        if state.dryrun is True:
-            if isinstance(f, CommandInvocation):
-                name = f.command.__name__
-            else:
-                name = f.__name__
-            args = ','.join(list(args) + ["%s=%s" % (k, v) for (k, v) in kwargs.iteritems()])
-            dryrun_logger = logging.getLogger(state.cli.name + '.dryrun')
-            dryrun_logger.debug("DRYRUN: {0}({1})".format(name, args))
-            return value
-        else:
-            return f(*args, **kwargs)
-    return wrapper

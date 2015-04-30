@@ -1,10 +1,28 @@
 import logging
 import types
-from inspect import cleandoc
-from .invocation import CommandInvocation
 
 
 LOG = logging.getLogger(__name__)
+
+
+def copy_func(f, name=None):
+    return types.FunctionType(f.func_code, f.func_globals, name or f.func_name,
+        f.func_defaults, f.func_closure)
+
+
+class CommandInvocation(object):
+
+    def __init__(self, cmd):
+        self.command = cmd
+
+    def __call__(self, *args, **kwargs):
+        command_kwargs = get_command_spec(self.command, without_fixtures=False)
+        for k, v in sorted(command_kwargs.items()):
+            if registry.is_fixture(k):
+                kwargs[k] = registry.get_fixture(k, state)
+        if state.debug:
+            LOG.debug("State:\n{0}".format(state))
+        return self.command(state.cli, *args, **kwargs)
 
 
 class Registry(object):
