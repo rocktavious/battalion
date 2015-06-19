@@ -1,11 +1,13 @@
 import logging
 from inspect import getdoc, cleandoc
 from .base import Base
+from .registry import registry
+from .utils import get_command_args, get_command_spec
 
 LOG = logging.getLogger(__name__)
 
 
-class AutoDocCommand(Base):
+class AutoDoc(Base):
     """
     Class that supports generating the docopt docstrings for the class and
     it's command functions.
@@ -15,7 +17,9 @@ class AutoDocCommand(Base):
         column_padding = 30
 
     def __init__(self, *args, **kwargs):
-        super(AutoDocCommand, self).__init__(*args, **kwargs)
+        super(AutoDoc, self).__init__(*args, **kwargs)
+        if self.__doc__ is None:
+            self.__doc__ = """"""
         # We check if autodoc has already happened
         # so that test frameworks can keep generating new
         # instances of the same class without redocumenting
@@ -24,6 +28,10 @@ class AutoDocCommand(Base):
             self.generate_class_doc()
             self.generate_commands_doc()
             self.set_autodoc(self.docstring)
+
+    @classmethod
+    def set_autodoc(cls, docstring):
+        cls.__autodoc__ = docstring
 
     @property
     def docstring(self):
@@ -39,18 +47,16 @@ class AutoDocCommand(Base):
         self.__autodoc__ = cleandoc(new_doc)
 
     def generate_commands_doc(self):
-        for name, func in self.commands.items():
-            if isclass(func) and issubclass(func, Handler):
-                LOG.debug('Documenting Command %s', name)
-                self.commands[name] = func()
-            else:
-                LOG.debug('Documenting Command %s', name)
-                new_command_doc = func.docstring or """{0}""".format(name)
-                new_command_doc += "\n\n"
-                new_command_doc += self.generate_command_usage(name, func)
-                new_command_doc += self.generate_command_options(func)
-                func.__autodoc__ = cleandoc(new_command_doc)
-                self.commands[name] = func
+        for name, func in registry.get_handlers(self.key).items():
+            LOG.debug('Documenting Handler %s', name)
+            func()
+        for name, func in registry.get_commands(self.key).items():
+            LOG.debug('Documenting Command %s', name)
+            new_command_doc = func.docstring if hasattr(func, 'docstring') else """{0}""".format(name)
+            new_command_doc += "\n\n"
+            new_command_doc += self.generate_command_usage(name, func)
+            new_command_doc += self.generate_command_options(func)
+            func.__autodoc__ = cleandoc(new_command_doc)
 
     def generate_usage(self):
         docstring = ""
@@ -63,27 +69,27 @@ class AutoDocCommand(Base):
     def generate_options(self):
         if "Options:" not in self.__doc__:
             docstring = "Options:\n"
-            for flags, desc in self._state.options:
+            for flags, desc in self.state.options:
                 if flags == '--config=<CONFIG>' and flags not in docstring:
-                    if isinstance(self, CLI):
-                        if self._state.default_config is None:
-                            self._state.default_config = '~/.{name}/{name}.yaml'.format(name=self.name)
-                        desc = desc.format(self._state.default_config)
+                    if registry.is_cli(self.key):
+                        if self.state.default_config is None:
+                            self.state.default_config = '~/.{name}/{name}.yaml'.format(name=self.name)
+                        desc = desc.format(self.state.default_config)
                     else:
                         continue
                 docstring += "    {0:<{2}} {1}\n".format(flags,
                                                          desc,
-                                                         self._state.column_padding)
+                                                         self.state.column_padding)
             docstring += "\n"
         return docstring
 
     def generate_commands(self):
         if "Commands:" not in self.__doc__:
             docstring = "Commands:\n"
-            for k, v in self.commands.items():
+            for k, v in registry.get_all(self.key).items():
                 docstring += "    {0:<{2}} {1}\n".format(k,
                                                          getdoc(v),
-                                                         self._state.column_padding)
+                                                         self.state.column_padding)
             docstring += "\n"
         return docstring
 
@@ -116,6 +122,6 @@ class AutoDocCommand(Base):
                     docstring += "    {0:<{3}} {1} [default: {2}]\n".format(flag_def,
                                                                             ' ',
                                                                             default,
-                                                                            self._state.column_padding)
+                                                                            self.state.column_padding)
                 docstring += "\n"
         return docstring

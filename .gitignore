@@ -55,3 +55,4 @@ target/
 *.DS_Store
 AUTHORS
 ChangeLog
+junit.xml

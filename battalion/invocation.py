@@ -1,5 +1,4 @@
 import logging
-from .utils import get_command_spec
 
 LOG = logging.getLogger(__name__)
 
@@ -18,7 +17,6 @@ class CommandInvocation(object):
         self.dryrun_value = None
 
     def __call__(self, *args, **kwargs):
-        command_kwargs = get_command_spec(self.command, without_fixtures=False)
         if state.debug:
             LOG.debug("State:\n{0}".format(state))
         if cli.dryrun:

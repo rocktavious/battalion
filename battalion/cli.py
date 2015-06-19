@@ -1,14 +1,21 @@
+import os
 import sys
 import traceback
+import six
+import yaml
+from pyul.coreUtils import synthesize, DotifyDict
 from .registry import registry
 from .autodoc import AutoDoc
+from .utils import parse_args
+from .exceptions import CommandExtractionError, NoSuchCommand
 
 class CLIRegistrationMixin(type):
     def __new__(cls, clsname, bases, attrs):
         newclass = super(CLIRegistrationMixin, cls).__new__(cls, clsname, bases, attrs)
+        registry.register_cli(newclass, (clsname,))
         for k, v in attrs.items():
             if registry.is_cached(v):
-                registry.register(v, k, (clsname,))
+                registry.register_command(v, (clsname, k))
         return newclass
 
 
@@ -16,12 +23,14 @@ class CLIRegistrationMixin(type):
 class CLI(AutoDoc):
     class State:
         debug = False
-        config = None
-        dryrun = None
         options = [('-d, --debug', 'Show debug messages'),
                    ('--config=<CONFIG>', 'The config filepath [default: {0}]'),
-                   ('--dryrun', 'If given any modifying actions will not be performed')]
+                   ('--dryrun', 'If given any modifying actions wrapped in dryrun will not be performed')]
         cwd = os.getcwd()
+
+    @property
+    def key(self):
+        return (self.name,)
 
     @classmethod
     def main(cls, argv=None):
@@ -34,17 +43,7 @@ class CLI(AutoDoc):
 
     def __init__(self):
         super(CLI, self).__init__()
-
-    def __call__(self, *args):
-        rv = None
-        self.setup_logging()
-        try:
-            rv = self.dispatch(args=" ".join(args))
-        except:
-            traceback.print_exc()
-            sys.exit(1)
-        finally:
-            return rv
+        registry.set_cli(self, self.key)
 
     #def __getattribute__(self, name):
         #command = object.__getattribute__(self, name)
@@ -56,23 +55,3 @@ class CLI(AutoDoc):
             #else:
                 #return CommandInvocation(cmd)
         #return command
-
-    def dispatch(self, argv):
-        options = parse_argv(self.docstring, argv, self.docopt_options)
-        options = cleanup_data(options)
-        self.load_config(options)
-        state.add_state(self._name, options)
-        command, args = self.get_command(options)
-        if isinstance(command, Handler):
-            return command.dispatch(args)
-        else:
-            args.insert(0, command.func_name)
-            return super(CLI, self).dispatch(argv)
-
-    def load_config(self, options):
-        config_filepath = os.path.abspath(os.path.expanduser(options.config))
-        state[self._name].config = config_filepath
-        if os.path.exists(config_filepath):
-            with open(config_filepath, 'r') as ymlfile:
-                config = DotifyDict(data=yaml.load(ymlfile))
-                state.add_config(cleanup_data(config))

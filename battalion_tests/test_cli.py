@@ -158,4 +158,4 @@ def test_multi_bind(cli, capsys):
     assert 'NAME' in out
 
 if __name__ == "__main__":
-    mycli()('--dryrun=True myhandler hello Kyle')
+    mycli()('--dryrun myhandler hello Kyle')
