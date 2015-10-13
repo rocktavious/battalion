@@ -1,4 +1,5 @@
 from battalion.api import *
+enable_logging("")
 
 # This represents a heavyweight obj that takes a while to be instantiated
 class Obj():
@@ -64,18 +65,18 @@ class handler(Handler):
         """
         name = cli.normal_function(cli.state.static_var)
         name = cli.command_output(val=name)
-        cli.myhandler.greeting(name=name)
+        cli.handler.greeting(name=name)
 
-    @command(alias='add2')
+    @command(alias='plus')
     def add(cli, num1, num2):
         """
         Add {num1} to {num2}
         """
-        return cli.main(['add', num1, num2])
+        return cli.add(num1=num1, num2=num2)
 
 
-@command(cli='myCLI', handler='myhandler', alias='greet') # alias or aliases are great ways to bridge gaps during refactoring of api
-@command(cli='myCLI') # multiple command decorators can be applied to place a command into multiple areas for ease of use but still benefits from a single source of code
+@command(cli='cli', handler='handler', alias='greet') # alias or aliases are great ways to bridge gaps during refactoring of api
+@command(cli='cli') # multiple command decorators can be applied to place a command into multiple areas for ease of use but still benefits from a single source of code
                       # NOTE: state will differ since its being built up with handler or without the handler
 def greeting(state, name="World"):
     """
@@ -91,7 +92,7 @@ def test_url(state):
     """
     print state.url
     
-registry.bind(test_url, 'myCLI', 'myhandler')
+registry.bind(test_url, 'cli', 'handler')
 
 if __name__ == "__main__":
     cli.main(['--help'])
@@ -102,9 +103,8 @@ if __name__ == "__main__":
     cli.main(['--msg', 'BOYAH!', 'command_output'])
     cli.main(['greeting'])
     cli.main(['handler', 'greeting'])
-    cli.main(['plus', '2', '3'])
+    cli.main(['add', '2', '3'])
     cli.main(['handler', 'plus', '2', '3'])
     cli.main(['handler', '--url', 'BOOM', 'test_url'])
     cli.main(['handler', 'test_url'])
-    cli.main(['--dryrun', 'myhandler', 'hello'])
     cli.main(['handler', 'hello'])

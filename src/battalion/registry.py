@@ -86,7 +86,11 @@ registry = Registry()
 
 class HandlerRegistrationMixin(type):
     def __new__(cls, clsname, bases, attrs):
-        newclass = super(HandlerRegistrationMixin, cls).__new__(cls, clsname, bases, attrs)
+        passthrough = {}
+        for k, v in attrs.items():
+            if not registry.is_cached(v):
+                passthrough[k] = v        
+        newclass = super(HandlerRegistrationMixin, cls).__new__(cls, clsname, bases, passthrough)
         if hasattr(newclass.State, 'cli') and newclass.State.cli is not None and newclass.State.cli != "self":
             registry.register(newclass, clsname, (newclass.State.cli,))
             for k, v in attrs.items():
@@ -97,7 +101,11 @@ class HandlerRegistrationMixin(type):
 
 class CLIRegistrationMixin(type):
     def __new__(cls, clsname, bases, attrs):
-        newclass = super(CLIRegistrationMixin, cls).__new__(cls, clsname, bases, attrs)
+        passthrough = {}
+        for k, v in attrs.items():
+            if not registry.is_cached(v):
+                passthrough[k] = v
+        newclass = super(CLIRegistrationMixin, cls).__new__(cls, clsname, bases, passthrough)
         for k, v in attrs.items():
             if registry.is_cached(v):
                 registry.register(v, k, (clsname,))
@@ -154,7 +162,7 @@ def doublewrap(f):
 
 
 @doublewrap
-def fixture(func, memoize=True):
+def fixture(func, memoize=False):
     """
     Decorator for a function that will be called ahead of the execution
     of a command that provides a return value to fill the commands
@@ -177,3 +185,11 @@ def fixture(func, memoize=True):
         new_func = func
     registry.register_fixture(new_func, func.__name__)
     return new_func
+
+@fixture
+def cli(state):
+    return state.cli
+
+@fixture
+def state(state):
+    return state

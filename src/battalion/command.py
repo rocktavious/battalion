@@ -40,7 +40,6 @@ def get_command_spec(command, without_fixtures=True):
     spec = getargspec(command)
     positional = [None] * (len(spec.args) - len(spec.defaults or []))
     kwargs = getcallargs(command, *positional)
-    kwargs.pop('cli')
     if without_fixtures:
         for name in registry._fixtures.keys():
             try:
@@ -68,7 +67,7 @@ class CommandInvocation(object):
                 kwargs[k] = registry.get_fixture(k, state)
         if state.debug:
             LOG.debug("State:\n{0}".format(state))
-        return self.command(state.cli, *args, **kwargs)
+        return self.command(*args, **kwargs)
 
 
 class BaseCommand(StateMixin):
@@ -87,10 +86,6 @@ class BaseCommand(StateMixin):
     @property
     def name(self):
         return self.__class__.__name__
-
-    @property
-    def handler(self):
-        return None
 
     @property
     def cli(self):
@@ -296,33 +291,24 @@ class Handler(AutoDocCommand):
     def __call__(self, *args, **kwargs):
         print self.__autodoc__
 
-    def __getattr__(self, name):
-        if name in self.commands:
-            cmd = self.commands[name]
+    def __getattr__(self, attr):
+        if attr in self.commands:
+            cmd = self.commands[attr]
             if isinstance(cmd, Handler):
                 return cmd
             else:
                 return CommandInvocation(cmd)
-        raise AttributeError
-
-    def __getattribute__(self, name):
-        command = object.__getattribute__(self, name)
-        commands = registry.get_commands((state.cli.name, object.__getattribute__(self, '__class__').__name__))
-        if name in commands.keys():
-            cmd = commands[name]
-            if isinstance(cmd, Handler):
-                return cmd
-            else:
-                return CommandInvocation(cmd)
-        return command
+        raise AttributeError("Unable to find attr or command for {0}".format(attr))
 
 
 @six.add_metaclass(CLIRegistrationMixin)
 class CLI(AutoDocCommand):
     class State:
-        options = [('-d, --debug', 'Show debug messages'),
-                   ('--config=<CONFIG>', 'The config filepath [default: {0}]'),
-                   ('--dryrun', 'If enabled any modifying actions will not be performed [default: False]')]
+        options = [
+            ('-d, --debug', 'Show debug messages'),
+            ('--config=<CONFIG>', 'The config filepath [default: {0}]'),
+            #('--dryrun', 'If enabled any modifying actions will not be performed [default: False]')
+        ]
         cwd = os.getcwd()
 
     @classmethod
@@ -366,25 +352,14 @@ class CLI(AutoDocCommand):
         finally:
             return rv
 
-    def __getattr__(self, name):
-        if name in self.commands:
-            cmd = self.commands[name]
+    def __getattr__(self, attr):
+        if attr in self.commands:
+            cmd = self.commands[attr]
             if isinstance(cmd, Handler):
                 return cmd
             else:
                 return CommandInvocation(cmd)
-        raise AttributeError
-
-    def __getattribute__(self, name):
-        command = object.__getattribute__(self, name)
-        commands = registry.get_commands((object.__getattribute__(self, '__class__').__name__,))
-        if name in commands.keys():
-            cmd = commands[name]
-            if isinstance(cmd, Handler):
-                return cmd
-            else:
-                return CommandInvocation(cmd)
-        return command
+        raise AttributeError("Unable to find attr or command for {0}".format(attr))
 
     @property
     def key(self):

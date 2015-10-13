@@ -36,7 +36,7 @@ class State(DotifyDict):
             self.update(config)
 
         for option in reversed(self.options_list):
-            self.update(option)
+            self.update(dict([(k,v) for k,v in option.items() if v is not None]))
 
         self.pop('state_list')
         self.pop('config_list')
