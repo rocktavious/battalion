@@ -1,15 +1,15 @@
 FROM python:2.7
 
-RUN mkdir -p /src
-RUN mkdir -p /out
-RUN mkdir -p /data
-RUN mkdir -p /media
+RUN mkdir -p /src /out /data
 
-COPY ./src/test-requirements.txt /tmp/test-requirements.txt
-RUN pip install -r /tmp/test-requirements.txt
-
-COPY ./src/requirements.txt /tmp/requirements.txt
-RUN pip install -r /tmp/requirements.txt
+RUN pip install \
+  docopt==0.6.2 \
+  pyul==0.4.5 \
+  six==1.9.0 \
+  pytest \
+  pytest-cov \
+  pytest-capturelog \
+  flake8>=2.3.0 \
 
 WORKDIR /src
 COPY ./src/ /src
