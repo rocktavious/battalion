@@ -1,6 +1,0 @@
-pyversion==0.4.2
-pbr==0.10.8
-six
-docopt
-pyul==0.4.5
-decorator
