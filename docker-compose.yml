@@ -2,8 +2,6 @@ base:
   build: .
   dockerfile: Dockerfile
   command: bash
-  volumes:
-  - "$PWD/src:/src"
 
 tests:
   extends:
@@ -20,3 +18,14 @@ pep8:
   command: flake8 --output-file=/out/flake8.txt battalion/
   volumes:
     - "$PWD/out:/out"
+
+release:
+  extends:
+    file: docker-compose.yml
+    service: base
+  command: python setup.py increment register sdist bdist_wheel upload
+  volumes:
+    - "~/.pypirc:/root/.pypirc"
+  environment:
+  - RELEASE_VERSION
+  - RELEASE_TYPE
