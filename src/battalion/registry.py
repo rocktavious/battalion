@@ -105,7 +105,10 @@ class CLIRegistrationMixin(type):
         for k, v in attrs.items():
             if not registry.is_cached(v):
                 passthrough[k] = v
-        newclass = super(CLIRegistrationMixin, cls).__new__(cls, clsname, bases, passthrough)
+        if clsname != "CLI":
+            config_option = ('--config=<CONFIG>', 'The config filepath [default: ~/.{0}.cfg]'.format(clsname))
+            passthrough['State'].options.append(config_option)
+        newclass = super(CLIRegistrationMixin, cls).__new__(cls, clsname, bases, passthrough)      
         for k, v in attrs.items():
             if registry.is_cached(v):
                 registry.register(v, k, (clsname,))

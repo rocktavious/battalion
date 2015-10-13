@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import os
 import sys
 import re
@@ -5,285 +6,24 @@ import logging
 import six
 import yaml
 import traceback
-from inspect import getdoc, cleandoc, isclass, getargspec, getcallargs
+from inspect import getdoc
 from pyul.coreUtils import DotifyDict
 from docopt import docopt, DocoptExit
 
 from .exceptions import NoSuchCommand
 from .registry import CLIRegistrationMixin, HandlerRegistrationMixin, registry
-from .state import StateMixin, state
+from .handler import HandlerMarker
+from .autodoc import AutoDocCommand
+from .state import state
 from .log import enable_logging
+from .utils import cleanup_data, CommandInvocation
+
 
 LOG = logging.getLogger(__name__)
 
 
-def cleanup_data(data):
-    new_data = {}
-    for k, v in data.items():
-        if k.startswith('--'):
-            k = k[2:]
-        if k.startswith('-'):
-            k = k[1:]
-        k = k.replace('-', '_')
-        if k in ['help', 'version', 'cli', 'options', 'column_padding', 'default_config', 'config']:
-            continue
-        new_data[k] = v
-    return DotifyDict(new_data)
-
-
-def get_command_args(command):
-    args = [a for a in getargspec(command).args if a not in registry._fixtures.keys() and a != 'cli']
-    return args
-
-
-def get_command_spec(command, without_fixtures=True):
-    spec = getargspec(command)
-    positional = [None] * (len(spec.args) - len(spec.defaults or []))
-    kwargs = getcallargs(command, *positional)
-    if without_fixtures:
-        for name in registry._fixtures.keys():
-            try:
-                kwargs.pop(name)
-            except KeyError:
-                pass
-    return kwargs
-
-
-def parse_doc_section(name, source):
-    pattern = re.compile('^([^\n]*' + name + '[^\n]*\n?(?:[ \t].*?(?:\n|$))*)',
-                         re.IGNORECASE | re.MULTILINE)
-    return [s.strip() for s in pattern.findall(source)]
-
-
-class CommandInvocation(object):
-
-    def __init__(self, cmd):
-        self.command = cmd
-
-    def __call__(self, *args, **kwargs):
-        command_kwargs = get_command_spec(self.command, without_fixtures=False)
-        for k, v in sorted(command_kwargs.items()):
-            if registry.is_fixture(k):
-                kwargs[k] = registry.get_fixture(k, state)
-        if state.debug:
-            LOG.debug("State:\n{0}".format(state))
-        return self.command(*args, **kwargs)
-
-
-class BaseCommand(StateMixin):
-    """
-    Base class for battalion commandline app
-    """
-
-    class State:
-        cli = None
-        version = 'UNKNOWN'
-        default_config = None
-        config_file = None
-        options = [('-h, --help', 'Show this screen.'),
-                   ('--version', 'Show version.')]
-
-    @property
-    def name(self):
-        return self.__class__.__name__
-
-    @property
-    def cli(self):
-        return self._state.cli
-
-    @property
-    def key(self):
-        return (self.cli, self.name)
-
-    @property
-    def commands(self):
-        return registry.get_commands(self.key)
-
-    @property
-    def handlers(self):
-        return [h for h in self.commands if isinstance(h, Handler)]
-
-    @property
-    def docstring(self):
-        raise NotImplementedError
-
-    @property
-    def docopt_options(self):
-        return {'options_first': True,
-                'version': self._state.version}
-
-    def format_command_args(self, command, kwargs):
-        new_kwargs = {}
-        command_kwargs = get_command_spec(command)
-        for k, v in sorted(kwargs.items()):
-            if k.startswith('--'):
-                k = k[2:]
-            if k.startswith('-'):
-                k = k[1:]
-            k = k.replace('-', '_')
-            k = k.replace('<', '')
-            k = k.replace('>', '')
-            # check if arg
-            if v is None or v == 'None':
-                v = new_kwargs.get(k, None) or command_kwargs.get(k, None) or None
-            if k in command_kwargs:
-                new_kwargs[k] = v
-        return new_kwargs
-
-    def get_options(self, argv):
-        options = docopt(self.docstring,
-                         argv,
-                         **self.docopt_options)
-        return options
-
-    def get_command(self, options):
-        command_name, args = options.pop('<command>'), options.pop('<args>')
-        if command_name is None or command_name is False:
-            raise SystemExit(self.docstring)
-        try:
-            command = self.commands[command_name]
-        except KeyError:
-            raise NoSuchCommand(command_name, self)
-        state.add_state(cleanup_data(self._state))
-        state.add_options(cleanup_data(options))
-        return command, args
-
-    def dispatch(self, argv):
-        options = self.get_options(argv)
-        command, args = self.get_command(options)
-        return self.run(command, args)
-
-    def run(self, command, args):
-        command_options = docopt(cleandoc(command.__autodoc__), args)
-        kwargs = self.format_command_args(command, command_options)
-        state.compile()
-        c = CommandInvocation(command)
-        return c(**kwargs)
-
-
-class AutoDocCommand(BaseCommand):
-    """
-    Class that supports generating the docopt docstrings for the class and
-    it's command functions.
-    """
-    class State:
-        column_padding = 30
-
-    def __init__(self):
-        if self.__doc__ is None:
-            self.__doc__ = ""
-        super(AutoDocCommand, self).__init__()
-        # We check if autodoc has already happend so that
-        # so that test frameworks can keep generating new
-        # instances of the same class without redocumenting
-        # which will cause a failure
-        if not hasattr(self, "__autodoc__"):
-            self.generate_class_doc()
-            self.generate_commands_doc()
-            self.set_autodoc(self.docstring)
-
-    @classmethod
-    def set_autodoc(cls, docstring):
-        cls.__autodoc__ = docstring
-
-    @property
-    def docstring(self):
-        return cleandoc(self.__autodoc__)
-
-    def generate_class_doc(self):
-        LOG.debug('Documenting %s', self.name)
-        new_doc = getdoc(self) or """{0}""".format(self.name)
-        new_doc += "\n\n"
-        new_doc += self.generate_usage()
-        new_doc += self.generate_options()
-        new_doc += self.generate_commands()
-        self.__autodoc__ = cleandoc(new_doc)
-
-    def generate_commands_doc(self):
-        for name, func in self.commands.items():
-            if isclass(func) and issubclass(func, Handler):
-                LOG.debug('Documenting Command %s', name)
-                self.commands[name] = func()
-            else:
-                LOG.debug('Documenting Command %s', name)
-                new_command_doc = getdoc(func) or """{0}""".format(name)
-                new_command_doc += "\n\n"
-                new_command_doc += self.generate_command_usage(name, func)
-                new_command_doc += self.generate_command_options(func)
-                func.__autodoc__ = cleandoc(new_command_doc)
-                self.commands[name] = func
-
-    def generate_usage(self):
-        docstring = ""
-        if "Usage:" not in self.__doc__:
-            docstring += "Usage:\n"
-            docstring += "    {0} [options] <command> [<args>...]\n".format(self.name)
-            docstring += "    {0} [options]\n\n".format(self.name)
-        return docstring
-
-    def generate_options(self):
-        if "Options:" not in self.__doc__:
-            docstring = "Options:\n"
-            for flags, desc in self._state.options:
-                if flags == '--config=<CONFIG>' and flags not in docstring:
-                    if isinstance(self, CLI):
-                        if self._state.default_config is None:
-                            self._state.default_config = '~/.{name}/{name}.yaml'.format(name=self.name)
-                        desc = desc.format(self._state.default_config)
-                    else:
-                        continue
-                docstring += "    {0:<{2}} {1}\n".format(flags,
-                                                         desc,
-                                                         self._state.column_padding)
-            docstring += "\n"
-        return docstring
-
-    def generate_commands(self):
-        if "Commands:" not in self.__doc__:
-            docstring = "Commands:\n"
-            for k, v in self.commands.items():
-                docstring += "    {0:<{2}} {1}\n".format(k,
-                                                         getdoc(v),
-                                                         self._state.column_padding)
-            docstring += "\n"
-        return docstring
-
-    def generate_command_usage(self, name, command):
-        docstring = ""
-        if command.__doc__ is None or "Usage:" not in command.__doc__:
-            docstring += "Usage:\n    {0} [options]\n".format(name)
-            args = get_command_args(command)
-            spec = get_command_spec(command)
-            if args:
-                docstring += "    {0} ".format(name)
-                for arg_name in args:
-                    if spec[arg_name] is not None:
-                        docstring += "[<{0}>] ".format(arg_name)
-                    else:
-                        docstring += "<{0}> ".format(arg_name)
-                docstring += "\n"
-            docstring += "\n"
-        return docstring
-
-    def generate_command_options(self, command):
-        docstring = ""
-        if command.__doc__ is None or "Options:" not in command.__doc__:
-            args = get_command_spec(command)
-            if args:
-                docstring += "Options:\n"
-                for arg, default in args.items():
-                    flag_def = "--{0}=<{1}>".format(arg,
-                                                    arg.upper())
-                    docstring += "    {0:<{3}} {1} [default: {2}]\n".format(flag_def,
-                                                                            ' ',
-                                                                            default,
-                                                                            self._state.column_padding)
-                docstring += "\n"
-        return docstring
-
-
 @six.add_metaclass(HandlerRegistrationMixin)
-class Handler(AutoDocCommand):
+class Handler(AutoDocCommand, HandlerMarker):
 
     def __init__(self):
         super(Handler, self).__init__()
@@ -306,7 +46,6 @@ class CLI(AutoDocCommand):
     class State:
         options = [
             ('-d, --debug', 'Show debug messages'),
-            ('--config=<CONFIG>', 'The config filepath [default: {0}]'),
             #('--dryrun', 'If enabled any modifying actions will not be performed [default: False]')
         ]
         cwd = os.getcwd()
@@ -385,19 +124,3 @@ class CLI(AutoDocCommand):
             with open(self._state.config_file, 'r') as ymlfile:
                 config = DotifyDict(data=yaml.load(ymlfile))
                 state.add_config(cleanup_data(config))
-
-
-def dryrun(f, value=None):
-    def wrapper(*args, **kwargs):
-        if state.dryrun is True:
-            if isinstance(f, CommandInvocation):
-                name = f.command.__name__
-            else:
-                name = f.__name__
-            args = ','.join(list(args) + ["%s=%s" % (k, v) for (k, v) in kwargs.iteritems()])
-            dryrun_logger = logging.getLogger(state.cli.name + '.dryrun')
-            dryrun_logger.debug("DRYRUN: {0}({1})".format(name, args))
-            return value
-        else:
-            return f(*args, **kwargs)
-    return wrapper
