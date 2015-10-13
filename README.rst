@@ -125,7 +125,7 @@ Then on the commandline
     >     -h, --help                     Show this screen.
     >     --version                      Show version.
     >     -d, --debug                    Show debug messages
-    >     --config=<CONFIG>              The config filepath [default: ~/.mycli/mycli.yaml]
+    >     --config=<CONFIG>              The config filepath [default: ~/.mycli.cfg]
     > 
     > Commands:
     >     greeting                       Prints "Hello {name}!"

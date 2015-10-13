@@ -9,10 +9,12 @@ RUN pip install \
   pytest \
   pytest-cov \
   pytest-capturelog \
-  flake8>=2.3.0 \
+  pyversion \
+  flake8>=2.3.0
 
 WORKDIR /src
 COPY ./src/ /src
+COPY ./README.rst /src/README.rst
 
 # This is to make pbr work
 RUN git init

@@ -46,7 +46,7 @@ class CLI(AutoDocCommand):
     class State:
         options = [
             ('-d, --debug', 'Show debug messages'),
-            #('--dryrun', 'If enabled any modifying actions will not be performed [default: False]')
+            ('--dryrun', 'If enabled any modifying actions will not be performed [default: False]')
         ]
         cwd = os.getcwd()
 
@@ -124,3 +124,18 @@ class CLI(AutoDocCommand):
             with open(self._state.config_file, 'r') as ymlfile:
                 config = DotifyDict(data=yaml.load(ymlfile))
                 state.add_config(cleanup_data(config))
+
+def dryrun(f, value=None):
+    def wrapper(*args, **kwargs):
+        if state.dryrun is True:
+            if isinstance(f, CommandInvocation):
+                name = f.command.__name__
+            else:
+                name = f.__name__
+            args = ','.join(list(args) + ["%s=%s" % (k, v) for (k, v) in kwargs.iteritems()])
+            dryrun_logger = logging.getLogger(state.cli.name + '.dryrun')
+            dryrun_logger.debug("DRYRUN: {0}({1})".format(name, args))
+            return value
+        else:
+            return f(*args, **kwargs)
+    return wrapper
